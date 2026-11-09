@@ -1,0 +1,189 @@
+{
+  "entities": {
+    "case": {
+      "title": "Case",
+      "description": "Pedagogical anamnese and evaluation case document",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier of the case",
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase UID of the educator/owner who created the case",
+          "maxLength": 128
+        },
+        "chiffre": {
+          "type": "string",
+          "description": "8-character anonymized case pseudonym",
+          "maxLength": 16
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of the last update",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of creation",
+          "maxLength": 64
+        },
+        "lastChapterId": {
+          "type": "number",
+          "description": "Index of the last visited chapter for easy resumption"
+        },
+        "stammdaten": {
+          "type": "object",
+          "description": "Master data including date, cost bearer, gender"
+        },
+        "rechtlicherStatus": {
+          "type": "object",
+          "description": "Custody and healthcare custody statuses"
+        },
+        "vorangegangeneHilfen": {
+          "type": "object",
+          "description": "Previous support measures and interventions"
+        },
+        "schulsituation": {
+          "type": "object",
+          "description": "School situation and attendance factors"
+        },
+        "psychosozial": {
+          "type": "object",
+          "description": "Psychosocial and family environment factors"
+        },
+        "entwicklungsstand": {
+          "type": "object",
+          "description": "Developmental milestones and neurodivergence screening"
+        },
+        "iqSelectedCode": {
+          "type": "string",
+          "description": "Selected cognitive assessment category code",
+          "maxLength": 32
+        },
+        "iqNotiz": {
+          "type": "string",
+          "description": "Notes on cognitive assessment",
+          "maxLength": 2000
+        },
+        "symptomatik": {
+          "type": "object",
+          "description": "Clinical and psychiatric symptoms documentation"
+        },
+        "somatisch": {
+          "type": "object",
+          "description": "Somatic and neurological findings"
+        },
+        "ergaenzungen": {
+          "type": "object",
+          "description": "Evaluation, educational assessment, and action plan"
+        }
+      },
+      "required": ["id", "ownerId", "chiffre", "updatedAt", "createdAt", "stammdaten"]
+    },
+    "chiffreLookup": {
+      "title": "ChiffreLookup",
+      "description": "Index mapping an 8-character case chiffre to its internal Firestore document ID for anonymous case resumption without local storage",
+      "type": "object",
+      "properties": {
+        "chiffre": {
+          "type": "string",
+          "description": "8-character uppercase chiffre",
+          "maxLength": 16
+        },
+        "caseId": {
+          "type": "string",
+          "description": "ID of the case document in the cases collection",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of the update",
+          "maxLength": 64
+        }
+      },
+      "required": ["chiffre", "caseId"]
+    },
+    "authorizedAdmin": {
+      "title": "AuthorizedAdmin",
+      "description": "Predefined whitelist of authorized staff and leadership email addresses allowed to access the admin area",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "description": "Normalized lowercase email address of the authorized colleague or boss",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name or job title of the colleague or chef",
+          "maxLength": 100
+        },
+        "role": {
+          "type": "string",
+          "description": "Role in the organization: chef, kollege, or admin",
+          "enum": ["chef", "kollege", "admin"]
+        },
+        "addedAt": {
+          "type": "string",
+          "description": "ISO timestamp when the email was whitelisted",
+          "maxLength": 64
+        },
+        "addedBy": {
+          "type": "string",
+          "description": "Email address of the administrator who authorized this account",
+          "maxLength": 128
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional notes or department affiliation",
+          "maxLength": 200
+        }
+      },
+      "required": ["email", "name", "role", "addedAt"]
+    },
+    "facilitySettings": {
+      "title": "FacilitySettings",
+      "description": "Configurable list of facilities, residential groups, and pedagogical areas for Pilgerhaus Weinheim",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "List of facility and group names"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of the last configuration update",
+          "maxLength": 64
+        },
+        "updatedBy": {
+          "type": "string",
+          "description": "Email of admin who last updated the areas",
+          "maxLength": 128
+        }
+      },
+      "required": ["items"]
+    }
+  },
+  "firestore": {
+    "/cases/{caseId}": {
+      "schema": "case",
+      "description": "Anamnese case documents indexed by case ID"
+    },
+    "/chiffres/{chiffre}": {
+      "schema": "chiffreLookup",
+      "description": "Direct 1-to-1 lookup index for resuming cases by chiffre without listing collections"
+    },
+    "/authorized_admins/{emailId}": {
+      "schema": "authorizedAdmin",
+      "description": "Strict whitelist of allowed email addresses for the admin area"
+    },
+    "/settings/{settingId}": {
+      "schema": "facilitySettings",
+      "description": "Application settings including configurable facilities and groups"
+    }
+  }
+}

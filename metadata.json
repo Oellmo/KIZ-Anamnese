@@ -1,0 +1,6 @@
+{
+  "name": "KIZ Anamnese & Fallbeurteilung",
+  "description": "Tablet-optimierte Protokollierungs-Webapp für die strukturierte pädagogische Fallbeurteilung und Anamnese (KIZ) mit schrittweiser Kapitelführung und Mitarbeiter-Versand.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

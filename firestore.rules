@@ -1,0 +1,104 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable Security Primitives
+    function incoming() {
+      return request.resource.data;
+    }
+    function existing() {
+      return resource.data;
+    }
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-\\.\\@]+$');
+    }
+    function isMasterAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email != null &&
+        request.auth.token.email.lower() == 'stefanbareis@gmail.com';
+    }
+    function isAuthorizedAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email != null &&
+        (
+          request.auth.token.email.lower() == 'stefanbareis@gmail.com' ||
+          exists(/databases/$(database)/documents/authorized_admins/$(request.auth.token.email.lower()))
+        );
+    }
+
+    // Validation Blueprint for Case
+    function isValidCase(data, docId) {
+      return data.keys().hasAll(['id', 'ownerId', 'chiffre', 'updatedAt', 'createdAt', 'stammdaten']) &&
+        data.id is string && data.id.size() > 0 && data.id.size() <= 64 && data.id == docId &&
+        data.ownerId is string && data.ownerId.size() > 0 && data.ownerId.size() <= 128 &&
+        data.chiffre is string && data.chiffre.size() > 0 && data.chiffre.size() <= 16 &&
+        data.updatedAt is string && data.updatedAt.size() <= 64 &&
+        data.createdAt is string && data.createdAt.size() <= 64 &&
+        data.stammdaten is map;
+    }
+
+    // Validation Blueprint for Authorized Admin Entry
+    function isValidAdminEntry(data, emailId) {
+      return data.keys().hasAll(['email', 'name', 'role', 'addedAt']) &&
+        data.email is string && data.email.lower() == emailId &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+        data.role is string && (data.role == 'chef' || data.role == 'kollege' || data.role == 'admin') &&
+        data.addedAt is string && data.addedAt.size() <= 64;
+    }
+
+    // Connection testing endpoint
+    match /test/connection {
+      allow get: if true;
+    }
+
+    // Anamnese Cases Collection
+    // Anyone can fill out and save a case without login.
+    // Listing all cases and deleting cases is strictly reserved for Authorized Admins.
+    match /cases/{caseId} {
+      allow get: if isValidId(caseId);
+      allow list: if isAuthorizedAdmin();
+      allow create: if isValidId(caseId) && isValidCase(incoming(), caseId);
+      allow update: if isValidId(caseId) && incoming().createdAt == existing().createdAt && isValidCase(incoming(), caseId);
+      allow delete: if isAuthorizedAdmin();
+    }
+
+    // Direct 1-to-1 Chiffre lookup mapping
+    match /chiffres/{chiffre} {
+      allow get: if isValidId(chiffre);
+      allow create, update: if isValidId(chiffre) &&
+        incoming().keys().hasAll(['chiffre', 'caseId']) &&
+        incoming().chiffre is string && incoming().chiffre.size() <= 16 &&
+        incoming().caseId is string && incoming().caseId.size() <= 64;
+      allow delete: if isAuthorizedAdmin();
+    }
+
+    // Whitelist of Authorized Admins (Colleagues, Chef, Admin)
+    match /authorized_admins/{emailId} {
+      // Single document lookup to check whitelist authorization status
+      allow get: if isValidId(emailId);
+      // Listing all whitelist entries: strictly restricted to authorized admins
+      allow list: if isAuthorizedAdmin();
+      // Only authorized admins can manage the whitelist
+      allow create, update: if isAuthorizedAdmin() && isValidId(emailId) && isValidAdminEntry(incoming(), emailId);
+      allow delete: if isAuthorizedAdmin() && emailId != 'stefanbareis@gmail.com';
+    }
+
+    // Configurable Application Settings (e.g. facilities/groups)
+    // Any educator can read settings to populate dropdowns in Chapter 1
+    // Only authorized admins can write/update settings
+    match /settings/{settingId} {
+      allow get: if isValidId(settingId);
+      allow create, update: if isAuthorizedAdmin() && isValidId(settingId) &&
+        incoming().keys().hasAll(['items']) &&
+        incoming().items is list && incoming().items.size() <= 100;
+      allow delete: if isAuthorizedAdmin();
+    }
+  }
+}

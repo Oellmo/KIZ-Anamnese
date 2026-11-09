@@ -1,0 +1,45 @@
+[
+  {
+    "entwicklungsstand": {},
+    "updatedAt": "2026-11-09T07:45:56.554Z",
+    "rechtlicherStatus": {
+      "sorgerecht": [
+        "gemeinsam"
+      ],
+      "sorgerechtNotiz": "",
+      "gesundheitsfuersorge": [
+        "sorgeberechtigte"
+      ],
+      "gesundheitsfuersorgeNotiz": ""
+    },
+    "createdAt": "2026-11-09T07:45:48.153Z",
+    "stammdaten": {
+      "alterInJahren": "",
+      "fachkraft": "Pädagogischer Fachdienst",
+      "einrichtung": "Haus im Feld – Rote Gruppe",
+      "datum": "2026-11-09",
+      "kostentraeger": "Jugendamt (§§ 27 ff. SGB VIII)",
+      "chiffre": "BC9YBEPT",
+      "geschlecht": "männlich"
+    },
+    "id": "case_1794210348153_5q1hl",
+    "somatisch": {},
+    "symptomatik": {},
+    "schulsituation": {},
+    "psychosozial": {},
+    "iqNotiz": "",
+    "vorangegangeneHilfen": {},
+    "chiffre": "BC9YBEPT",
+    "ergaenzungen": {
+      "angebotsEvaluation": "",
+      "freitext": "",
+      "naechsteSchritte": "",
+      "zielvereinbarung": "",
+      "verantwortlich": "Pilgerhaus Weinheim – KIZ Fachdienst",
+      "paedagogischeEinschaetzung": ""
+    },
+    "ownerId": "OHi6QNWnlgPC0aPMSz3GLVv9UYT2",
+    "iqSelectedCode": "",
+    "lastChapterId": 0
+  }
+]

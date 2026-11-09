@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="kizGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#047857" />
+      <stop offset="50%" stop-color="#059669" />
+      <stop offset="100%" stop-color="#0d9488" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#022c22" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <!-- Rounded App Background -->
+  <rect width="512" height="512" rx="112" fill="url(#kizGrad)" />
+
+  <!-- Shield Base Outline -->
+  <g filter="url(#shadow)" fill="none" stroke="#ffffff" stroke-width="20" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M256 96 L376 136 C376 272 256 360 256 384 C256 360 136 272 136 136 Z" fill="#ffffff" fill-opacity="0.12" />
+  </g>
+
+  <!-- Cross / Document Symbol inside -->
+  <g fill="#ffffff">
+    <!-- Horizontal Cross Bar -->
+    <rect x="196" y="220" width="120" height="32" rx="12" />
+    <!-- Vertical Cross Bar -->
+    <rect x="240" y="176" width="32" height="120" rx="12" />
+  </g>
+
+  <!-- Subtle Checkmark Accent -->
+  <path d="M208 320 L244 352 L312 284" fill="none" stroke="#6ee7b7" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
+</svg>
