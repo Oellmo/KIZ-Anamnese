@@ -52,7 +52,7 @@ import {
 } from 'lucide-react';
 import { KizFormData, AuthorizedAdmin } from '../types/anamnese';
 import { CHAPTERS, EINRICHTUNG_OPTIONS } from '../data/kizFormStructure';
-import { computeAggregatedAnalytics, generateCsvExport, ItemStatistic } from '../utils/analyticsHelpers';
+import { computeAggregatedAnalytics, generateCsvExport, ItemStatistic, AggregatedAnalytics } from '../utils/analyticsHelpers';
 import { computeFormStatistics, downloadJsonFile } from '../utils/exportHelpers';
 import { 
   ADMIN_EMAIL, 
@@ -66,6 +66,7 @@ import {
 import { ClientRadarChart } from './ClientRadarChart';
 import { PWAInstallButton } from './PWAInstallButton';
 import { LegalNoticeModal, LegalTab } from './LegalNoticeModal';
+import { AnalyticsPdfReportModal } from './AnalyticsPdfReportModal';
 
 /**
  * Normalizes user input for facility / group creation.
@@ -202,6 +203,11 @@ interface AdminDashboardProps {
   onSyncAllToFirebase: () => Promise<void>;
   facilities?: string[];
   onSaveFacilities?: (updatedFacilities: string[]) => Promise<void>;
+  onAnalyticsReportChange?: (
+    analytics: AggregatedAnalytics,
+    filteredCases: KizFormData[],
+    facilityFilter: string
+  ) => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -222,10 +228,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onSyncAllToFirebase,
   facilities,
   onSaveFacilities,
+  onAnalyticsReportChange,
 }) => {
   // Navigation tabs within Admin Dashboard
   const [activeTab, setActiveTab] = useState<'cases' | 'analytics' | 'facilities' | 'whitelist'>('cases');
   const [legalModalTab, setLegalModalTab] = useState<LegalTab | null>(null);
+  const [showPdfReportModal, setShowPdfReportModal] = useState(false);
 
   // Authorized Admins Whitelist state
   const [authorizedAdmins, setAuthorizedAdmins] = useState<AuthorizedAdmin[]>([]);
@@ -551,6 +559,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Compute analytics across filtered cohort cases
   const analytics = useMemo(() => computeAggregatedAnalytics(analyticsCases), [analyticsCases]);
   const activeCase = useMemo(() => cases.find((c) => c.id === activeCaseId) || (cases.length > 0 ? cases[0] : undefined), [cases, activeCaseId]);
+
+  // Keep root-level print report synced with the active cohort/group filter
+  React.useEffect(() => {
+    if (onAnalyticsReportChange) {
+      onAnalyticsReportChange(analytics, analyticsCases, analyticsFacilityFilter);
+    }
+  }, [analytics, analyticsCases, analyticsFacilityFilter, onAnalyticsReportChange]);
 
   // Handle manual sync
   const handleManualSync = async () => {
@@ -1889,7 +1904,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 </p>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   type="button"
                   onClick={handleExportCsv}
@@ -1897,6 +1912,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 >
                   <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
                   <span>CSV-Report exportieren</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowPdfReportModal(true)}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer shadow-xs"
+                >
+                  <Printer className="w-4 h-4 text-white" />
+                  <span>DIN A4 PDF-Report</span>
                 </button>
               </div>
             </div>
@@ -3169,6 +3192,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         isOpen={!!legalModalTab}
         onClose={() => setLegalModalTab(null)}
         initialTab={legalModalTab || 'datenschutz'}
+      />
+
+      {/* DIN A4 PDF Kohorten-Bericht Modal */}
+      <AnalyticsPdfReportModal
+        isOpen={showPdfReportModal}
+        onClose={() => setShowPdfReportModal(false)}
+        analytics={analytics}
+        analyticsCases={analyticsCases}
+        facilityFilter={analyticsFacilityFilter}
       />
     </div>
   );

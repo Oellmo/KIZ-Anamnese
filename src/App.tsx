@@ -18,8 +18,10 @@ import { SummaryEvaluationView } from './components/SummaryEvaluationView';
 import { AdminDashboard } from './components/AdminDashboard';
 import { HomeScreen } from './components/HomeScreen';
 import { PrintReportView } from './components/PrintReportView';
+import { AnalyticsPrintReportView } from './components/AnalyticsPrintReportView';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { computeFormStatistics } from './utils/exportHelpers';
+import { computeAggregatedAnalytics, AggregatedAnalytics } from './utils/analyticsHelpers';
 import { 
   loginWithGoogle, 
   logoutUser, 
@@ -68,6 +70,21 @@ export default function App() {
   // Navigation views: 'home' | 'questionnaire' | 'admin'
   const [viewMode, setViewMode] = useState<'home' | 'questionnaire' | 'admin'>('home');
   const [currentChapterId, setCurrentChapterId] = useState<number>(0);
+
+  // Synced analytics cohort data from AdminDashboard so DIN A4 PDF prints the active group/house filter
+  const [adminPrintReport, setAdminPrintReport] = useState<{
+    analytics: AggregatedAnalytics;
+    analyticsCases: KizFormData[];
+    facilityFilter: string;
+  } | null>(null);
+  const [adminSingleCaseToPrint, setAdminSingleCaseToPrint] = useState<KizFormData | null>(null);
+
+  const handleAnalyticsReportChange = useCallback(
+    (analytics: AggregatedAnalytics, filteredCases: KizFormData[], facilityFilter: string) => {
+      setAdminPrintReport({ analytics, analyticsCases: filteredCases, facilityFilter });
+    },
+    []
+  );
 
   const saveTimeoutRef = useRef<any>(null);
 
@@ -341,7 +358,7 @@ export default function App() {
   const { totalMarkedCount } = activeCase ? computeFormStatistics(activeCase) : { totalMarkedCount: 0 };
 
   return (
-    <div className="h-[100dvh] max-h-[100dvh] bg-slate-100/70 text-slate-800 antialiased font-sans flex flex-col overflow-hidden">
+    <div className="h-[100dvh] max-h-[100dvh] bg-slate-100/70 text-slate-800 antialiased font-sans flex flex-col overflow-hidden print:h-auto print:max-h-none print:overflow-visible print:block print:bg-white">
       {/* Interactive Tablet Screen Layout (hidden during print) */}
       <div className="print:hidden flex flex-col h-full overflow-hidden">
         {viewMode === 'home' ? (
@@ -387,6 +404,12 @@ export default function App() {
               }}
               onPrintCase={(caseData) => {
                 setActiveCaseId(caseData.id);
+                setAdminSingleCaseToPrint(caseData);
+                const clearAfterPrint = () => {
+                  setAdminSingleCaseToPrint(null);
+                  window.removeEventListener('afterprint', clearAfterPrint);
+                };
+                window.addEventListener('afterprint', clearAfterPrint);
                 setTimeout(() => handlePrint(), 80);
               }}
               onLogin={loginWithGoogle}
@@ -394,6 +417,7 @@ export default function App() {
               onSyncAllToFirebase={handleSyncAllToFirebase}
               facilities={facilities}
               onSaveFacilities={handleSaveFacilities}
+              onAnalyticsReportChange={handleAnalyticsReportChange}
             />
           </div>
         ) : !activeCase ? (
@@ -495,8 +519,21 @@ export default function App() {
       {/* Offline connectivity indicator */}
       <OfflineIndicator />
 
-      {/* Clean Printable Report Layout (rendered only when user prints or saves PDF and activeCase exists) */}
-      {activeCase && <PrintReportView formData={activeCase} />}
+      {/* Clean Printable Report Layout for single case (questionnaire view or explicit single-case print from admin) */}
+      {adminSingleCaseToPrint ? (
+        <PrintReportView formData={adminSingleCaseToPrint} />
+      ) : viewMode === 'questionnaire' && activeCase ? (
+        <PrintReportView formData={activeCase} />
+      ) : null}
+
+      {/* Multi-Page DIN A4 Printable Analytics Report Layout for Admin Dashboard */}
+      {viewMode === 'admin' && !adminSingleCaseToPrint && cases.length > 0 && (
+        <AnalyticsPrintReportView
+          analytics={adminPrintReport?.analytics ?? computeAggregatedAnalytics(cases)}
+          analyticsCases={adminPrintReport?.analyticsCases ?? cases}
+          facilityFilter={adminPrintReport?.facilityFilter ?? 'all'}
+        />
+      )}
     </div>
   );
 }

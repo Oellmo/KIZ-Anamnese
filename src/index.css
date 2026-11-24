@@ -47,14 +47,37 @@ select {
   touch-action: pan-y;
 }
 
-/* Print override so documents print across all pages */
+/* Print override so documents print cleanly across all DIN A4 pages */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
   html,
   body,
   #root {
     position: static !important;
+    display: block !important;
     overflow: visible !important;
     height: auto !important;
+    min-height: 0 !important;
     max-height: none !important;
+    width: auto !important;
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .page-break,
+  .print-page-break {
+    break-before: page !important;
+    page-break-before: always !important;
+  }
+
+  .no-break,
+  .print-avoid-break {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 }
