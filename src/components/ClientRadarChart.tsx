@@ -46,6 +46,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
   
   // Drill-down chapter selection (null = top-level 7 dimensions radar)
   const [drillDownId, setDrillDownId] = useState<string | null>(null);
+  const isPsychiatricDiagnosisDrillDown = drillDownId === 'symptoms-psychiatric';
 
   // Hovered or selected item for deep inspection
   const [hoveredDimensionId, setHoveredDimensionId] = useState<string | null>(null);
@@ -71,8 +72,28 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
   // Subcategory drill-down result if a chapter is selected
   const drillDownResult: ChapterDrillDownResult | null = useMemo(() => {
     if (!drillDownId) return null;
+    if (drillDownId === 'symptoms-psychiatric') {
+      const symptomsResult = computeChapterDrillDown('symptoms', cases, comparisonCase);
+      return {
+        ...symptomsResult,
+        title: '6.1 Psychiatrische Diagnosen',
+        shortTitle: 'Diagnosen (6.1.1–6.1.5)',
+        description: 'Prävalenz der psychiatrischen Diagnosekategorien 6.1.1 bis 6.1.5 im Vergleich über alle ausgewählten Fälle.',
+        subcategories: symptomsResult.subcategories.filter((subcategory) => /^6\.1\.[1-5]$/.test(subcategory.code)),
+      };
+    }
     return computeChapterDrillDown(drillDownId, cases, comparisonCase);
   }, [drillDownId, cases, comparisonCase]);
+
+  const selectSubcategory = (code: string) => {
+    if (code === '6.3' && drillDownResult?.dimensionId === 'symptoms') {
+      setDrillDownId('symptoms-psychiatric');
+      setHoveredSubcatCode(null);
+      setFocusedOptionSubcatCode(null);
+      return;
+    }
+    setHoveredSubcatCode(code);
+  };
 
   const dimensions = profile.dimensions;
 
@@ -249,13 +270,13 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
             <button
               type="button"
               onClick={() => {
-                setDrillDownId(null);
-                setHoveredSubcatCode(null);
+                setDrillDownId(isPsychiatricDiagnosisDrillDown ? 'symptoms' : null);
+                setHoveredSubcatCode(isPsychiatricDiagnosisDrillDown ? '6.3' : null);
               }}
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
-              <span>Zurück zur Gesamtübersicht</span>
+              <span>{isPsychiatricDiagnosisDrillDown ? 'Zurück zu Sozialverhalten (F91)' : 'Zurück zur Gesamtübersicht'}</span>
             </button>
           ) : (
             /* Metric Mode Toggle in top view with Help button */
@@ -389,7 +410,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
 
         {/* Quick buttons for each chapter */}
         {dimensions.map((d) => {
-          const isSelected = drillDownId === d.id;
+          const isSelected = drillDownId === d.id || (isPsychiatricDiagnosisDrillDown && d.id === 'symptoms');
           return (
             <button
               key={d.id}
@@ -436,12 +457,12 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
           <button
             type="button"
             onClick={() => {
-              setDrillDownId(null);
-              setHoveredSubcatCode(null);
+              setDrillDownId(isPsychiatricDiagnosisDrillDown ? 'symptoms' : null);
+              setHoveredSubcatCode(isPsychiatricDiagnosisDrillDown ? '6.3' : null);
             }}
             className="text-emerald-800 hover:text-emerald-950 underline font-bold shrink-0 text-xs cursor-pointer"
           >
-            ← Übersicht
+            {isPsychiatricDiagnosisDrillDown ? '← Sozialverhalten (F91)' : '← Übersicht'}
           </button>
         )}
       </div>
@@ -671,7 +692,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                     <g
                       className="cursor-pointer"
                       onMouseEnter={() => setHoveredSubcatCode(sub.code)}
-                      onClick={() => setHoveredSubcatCode(sub.code)}
+                      onClick={() => selectSubcategory(sub.code)}
                     >
                       {isHovered && (
                         <circle
@@ -714,7 +735,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                       transform={`translate(${lx}, ${ly})`}
                       className="cursor-pointer"
                       onMouseEnter={() => setHoveredSubcatCode(sub.code)}
-                      onClick={() => setHoveredSubcatCode(sub.code)}
+                      onClick={() => selectSubcategory(sub.code)}
                     >
                       <text
                         x={0}
@@ -726,6 +747,9 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                       >
                         {sub.shortLabel}
                       </text>
+                      {sub.code === '6.3' && drillDownResult.dimensionId === 'symptoms' && (
+                        <title>Klicken, um die Diagnosekategorien 6.1.1–6.1.5 als Spinnendiagramm anzuzeigen</title>
+                      )}
                       <text
                         x={0}
                         y={9}
@@ -1083,7 +1107,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setDrillDownId(null);
+                    setDrillDownId(isPsychiatricDiagnosisDrillDown ? 'symptoms' : null);
                     setHoveredSubcatCode(null);
                     setFocusedOptionSubcatCode(null);
                     setHoveredOptionName(null);
@@ -1091,7 +1115,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                   className="w-full py-2 px-3 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Zurück zu den 7 Hauptbereichen</span>
+                  <span>{isPsychiatricDiagnosisDrillDown ? 'Zurück zu Sozialverhalten (F91)' : 'Zurück zu den 7 Hauptbereichen'}</span>
                 </button>
               </div>
             </div>
@@ -1186,10 +1210,11 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                 {drillDownResult.subcategories.map((sub) => {
                   const isHovered = hoveredSubcatCode === sub.code;
                   return (
-                    <div
+                    <button
                       key={sub.code}
-                      onClick={() => setHoveredSubcatCode(sub.code)}
-                      className={`flex items-center justify-between p-2 rounded-xl text-xs transition-colors cursor-pointer ${
+                      type="button"
+                      onClick={() => selectSubcategory(sub.code)}
+                      className={`w-full text-left flex items-center justify-between p-2 rounded-xl text-xs transition-colors cursor-pointer ${
                         isHovered
                           ? 'bg-emerald-50 text-emerald-950 font-bold border border-emerald-200/60'
                           : 'hover:bg-slate-50 text-slate-700 border border-transparent'
@@ -1208,7 +1233,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                         <span className="font-mono font-bold text-slate-900">{sub.prevalencePercentage}%</span>
                         <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
