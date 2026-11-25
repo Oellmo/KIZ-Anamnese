@@ -25,6 +25,8 @@ export const ProtocolItemRow: React.FC<ProtocolItemRowProps> = ({
   entry,
   onChange,
   hasDauer,
+  hasBeschreibung,
+  placeholder,
   sublabel,
   dropdownOptions,
   dropdownSelectionMode = 'multiple',

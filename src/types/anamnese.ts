@@ -43,12 +43,6 @@ export interface KizFormData {
     suspensions?: boolean;
     suspensionsNotiz?: string;
   };
-  schulsituationDetails?: {
-    trend?: string;
-    suspensions?: boolean;
-    suspensionsNotiz?: string;
-  };
-
   // Chapter 4: Psychosoziale Umstände & Umfeld (keyed by code like '4.1.1', '4.2.1', ...)
   psychosozial: Record<string, ItemEntry>;
 
@@ -79,7 +73,6 @@ export interface KizFormData {
 export interface SectionDefinition {
   id: string;
   title: string;
-  selectionType?: 'single' | 'multiple';
   codePrefix?: string;
   description?: string;
   selectionType?: 'single' | 'multiple';
@@ -89,8 +82,6 @@ export interface SectionDefinition {
 export interface ItemDefinition {
   code: string;
   label: string;
-  description?: string;
-  selectionType?: 'single' | 'multiple';
   description?: string;
   selectionType?: 'single' | 'multiple';
   hasDauer?: boolean;
