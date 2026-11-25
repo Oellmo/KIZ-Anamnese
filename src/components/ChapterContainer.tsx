@@ -937,6 +937,7 @@ export const ChapterContainer: React.FC<ChapterContainerProps> = ({
                       placeholder={item.placeholder}
                       sublabel={item.sublabel}
                       dropdownOptions={item.dropdownOptions}
+                      dropdownSelectionMode={item.dropdownSelectionMode}
                       entry={entry}
                       onChange={(newEntry) => handleItemChange(currentCategory, item.code, newEntry)}
                     />

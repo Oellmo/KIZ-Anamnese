@@ -82,6 +82,7 @@ export interface ItemDefinition {
   placeholder?: string;
   sublabel?: string;
   dropdownOptions?: string[];
+  dropdownSelectionMode?: 'single' | 'multiple';
 }
 
 export interface ChapterDefinition {

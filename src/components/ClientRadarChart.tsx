@@ -77,9 +77,9 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
       return {
         ...symptomsResult,
         title: '6.1 Psychiatrische Diagnosen',
-        shortTitle: 'Diagnosen (6.1.1–6.1.5)',
-        description: 'Prävalenz der psychiatrischen Diagnosekategorien 6.1.1 bis 6.1.5 im Vergleich über alle ausgewählten Fälle.',
-        subcategories: symptomsResult.subcategories.filter((subcategory) => /^6\.1\.[1-5]$/.test(subcategory.code)),
+        shortTitle: 'Diagnosen (6.1.1–6.1.8)',
+        description: 'Prävalenz der psychiatrischen Diagnosekategorien 6.1.1 bis 6.1.8 im Vergleich über alle ausgewählten Fälle.',
+        subcategories: symptomsResult.subcategories.filter((subcategory) => /^6\.1\.[1-8]$/.test(subcategory.code)),
       };
     }
     return computeChapterDrillDown(drillDownId, cases, comparisonCase);
@@ -748,7 +748,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                         {sub.shortLabel}
                       </text>
                       {sub.code === '6.3' && drillDownResult.dimensionId === 'symptoms' && (
-                        <title>Klicken, um die Diagnosekategorien 6.1.1–6.1.5 als Spinnendiagramm anzuzeigen</title>
+                        <title>Klicken, um die Diagnosekategorien 6.1.1–6.1.8 als Spinnendiagramm anzuzeigen</title>
                       )}
                       <text
                         x={0}

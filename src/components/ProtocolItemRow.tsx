@@ -12,6 +12,7 @@ interface ProtocolItemRowProps {
   placeholder?: string;
   sublabel?: string;
   dropdownOptions?: string[];
+  dropdownSelectionMode?: 'single' | 'multiple';
 }
 
 export const ProtocolItemRow: React.FC<ProtocolItemRowProps> = ({
@@ -22,6 +23,7 @@ export const ProtocolItemRow: React.FC<ProtocolItemRowProps> = ({
   hasDauer,
   sublabel,
   dropdownOptions,
+  dropdownSelectionMode = 'multiple',
 }) => {
   const isSelected = !!entry?.selected;
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -62,6 +64,19 @@ export const ProtocolItemRow: React.FC<ProtocolItemRowProps> = ({
   };
 
   const toggleOption = (option: string) => {
+    if (dropdownSelectionMode === 'single') {
+      const nextOptions = selectedOptions.includes(option) ? [] : [option];
+      onChange({
+        selected: true,
+        dauer: entry?.dauer || '',
+        beschreibung: nextOptions.join(', '),
+        selectedOptions: nextOptions,
+        tags: [],
+      });
+      if (nextOptions.length > 0) setIsDropdownOpen(false);
+      return;
+    }
+
     const exists = selectedOptions.includes(option);
     const nextOptions = exists
       ? selectedOptions.filter((o) => o !== option)
@@ -206,10 +221,14 @@ export const ProtocolItemRow: React.FC<ProtocolItemRowProps> = ({
           <div ref={dropdownRef} className="mt-3 pt-2.5 border-t border-slate-200/80 relative">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                <span>Spezifizierung (Mehrfachauswahl aus Dropdown):</span>
+                <span>
+                  {dropdownSelectionMode === 'single'
+                    ? 'Spezifizierung (eine Auswahl):'
+                    : 'Spezifizierung (Mehrfachauswahl aus Dropdown):'}
+                </span>
                 {selectedOptions.length > 0 && (
                   <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
-                    {selectedOptions.length} ausgewählt
+                    {dropdownSelectionMode === 'single' ? 'Auswahl getroffen' : `${selectedOptions.length} ausgewählt`}
                   </span>
                 )}
               </label>
@@ -229,7 +248,9 @@ export const ProtocolItemRow: React.FC<ProtocolItemRowProps> = ({
                 <span>
                   {selectedOptions.length === 0
                     ? 'Dropdown öffnen & Optionen wählen...'
-                    : `${selectedOptions.length} Option${selectedOptions.length > 1 ? 'en' : ''} gewählt`}
+                    : dropdownSelectionMode === 'single'
+                      ? '1 Option gewählt'
+                      : `${selectedOptions.length} Option${selectedOptions.length > 1 ? 'en' : ''} gewählt`}
                 </span>
                 {isDropdownOpen ? (
                   <ChevronUp className="w-3.5 h-3.5 shrink-0" />
@@ -265,7 +286,11 @@ export const ProtocolItemRow: React.FC<ProtocolItemRowProps> = ({
             {isDropdownOpen && (
               <div className="mt-2 bg-white rounded-2xl border border-slate-300 shadow-xl p-2.5 z-30 space-y-1 animate-in fade-in zoom-in-95 duration-100">
                 <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider px-2 py-1 flex items-center justify-between border-b border-slate-100">
-                  <span>Optionen anklicken zum Auswählen (Mehrfachauswahl)</span>
+                  <span>
+                    {dropdownSelectionMode === 'single'
+                      ? 'Eine Option auswählen'
+                      : 'Optionen anklicken zum Auswählen (Mehrfachauswahl)'}
+                  </span>
                   <button
                     type="button"
                     onClick={() => setIsDropdownOpen(false)}

@@ -150,7 +150,7 @@ export function computeRadarProfile(cases: KizFormData[], singleCase?: KizFormDa
       chapterId: 6,
       chapterTitle: '6. Symptomatik',
       description: 'Ängste, Depression, Impulsdurchbrüche, Wut & Opposition',
-      totalItemsInPool: 18,
+      totalItemsInPool: 20,
       countFn: (c: KizFormData) => {
         const sym = c.symptomatik || {};
         return Object.values(sym).filter((e) => e && (e.selected || (e.beschreibung && e.beschreibung.trim().length > 0))).length;
@@ -437,6 +437,35 @@ export function computeChapterDrillDown(
             'histrionische Persönlichkeitsstörung',
             'andere Persönlichkeitsstörungen'
           ],
+        },
+        {
+          code: '6.1.6',
+          label: 'Bindungsstörung',
+          shortLabel: 'Bindungsstörung',
+          description: 'Reaktive Bindungsstörung oder Bindungsstörung mit Enthemmung',
+          checkFn: (c) => !!c.symptomatik?.['6.1.6']?.selected,
+          dropdownOptions: [
+            'Reaktive Bindungsstörung des Kindesalters',
+            'Bindungsstörung des Kindesalters mit Enthemmung'
+          ],
+        },
+        {
+          code: '6.1.7',
+          label: 'Enuresis',
+          shortLabel: 'Enuresis',
+          description: 'Einnässen tagsüber und/oder nachts',
+          checkFn: (c) => !!c.symptomatik?.['6.1.7']?.selected,
+          dropdownOptions: [
+            'Einnässen tagsüber',
+            'Einnässen nachts'
+          ],
+        },
+        {
+          code: '6.1.8',
+          label: 'Enkopresis',
+          shortLabel: 'Enkopresis',
+          description: 'Unwillkürlicher oder willentlicher Stuhlabgang an unpassenden Orten',
+          checkFn: (c) => !!c.symptomatik?.['6.1.8']?.selected,
         },
         {
           code: '6.2',

@@ -281,6 +281,24 @@ export const CHAPTERS: ChapterDefinition[] = [
               'andere Persönlichkeitsstörungen'
             ]
           },
+          {
+            code: '6.1.6',
+            label: 'Bindungsstörung',
+            dropdownOptions: [
+              'Reaktive Bindungsstörung des Kindesalters',
+              'Bindungsstörung des Kindesalters mit Enthemmung'
+            ],
+            dropdownSelectionMode: 'single'
+          },
+          {
+            code: '6.1.7',
+            label: 'Enuresis',
+            dropdownOptions: [
+              'Einnässen tagsüber',
+              'Einnässen nachts'
+            ]
+          },
+          { code: '6.1.8', label: 'Enkopresis' },
         ],
       },
       {
