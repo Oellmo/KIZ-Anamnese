@@ -539,8 +539,13 @@ export function computeChapterDrillDown(
           { code: 'trend-stable', label: 'Entwicklungstendenz: gleichbleibend', trend: 'gleichbleibend' },
           { code: 'trend-fluctuating', label: 'Entwicklungstendenz: schwankend', trend: 'schwankend' },
           { code: 'trend-improving', label: 'Entwicklungstendenz: rückläufig / bessernd', trend: 'rückläufig / bessernd' },
-        {
-      subcatDefs.push(
+        ].map(({ code, label, trend }) => ({
+          code,
+          label,
+          shortLabel: label.replace('Entwicklungstendenz: ', ''),
+          description: 'Entwicklungstendenz der schulischen Situation',
+          checkFn: (c: KizFormData) => c.schulsituationDetails?.trend === trend,
+        })),
         ...[
           { code: 'suspensions-yes', label: 'Suspendierungen / schulische Ausschlüsse: Ja', shortLabel: 'Suspendierungen: Ja', value: true },
           { code: 'suspensions-no', label: 'Suspendierungen / schulische Ausschlüsse: Nein', shortLabel: 'Suspendierungen: Nein', value: false },
@@ -550,14 +555,7 @@ export function computeChapterDrillDown(
           shortLabel,
           description: 'Suspendierungen oder schulische Ausschlüsse',
           checkFn: (c: KizFormData) => c.schulsituationDetails?.suspensions === value,
-        }))
-      );
-          code: 'suspensions-no',
-          label: 'Suspendierungen / schulische Ausschlüsse: Nein',
-          shortLabel: 'Suspendierungen: Nein',
-          description: 'Es wurden keine Suspendierungen oder schulischen Ausschlüsse berichtet',
-          checkFn: (c) => c.schulsituationDetails?.suspensions === false,
-        },
+        })),
       ];
       break;
 
