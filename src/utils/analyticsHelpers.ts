@@ -104,15 +104,16 @@ export function computeRadarProfile(cases: KizFormData[], singleCase?: KizFormDa
   const dimensionsConfig = [
     {
       id: 'school',
-      label: 'Schulische Gefährdung & Absentismus',
-      shortLabel: 'Schulgefährdung',
+      label: 'Schulsituation & Verlauf',
+      shortLabel: 'Schulsituation',
       chapterId: 3,
-      chapterTitle: '3. Schulsituation',
-      description: 'Absentismus, Schulverweigerung, Leistungsabfall & Suspendierungen',
-      totalItemsInPool: 6,
+      chapterTitle: '3. Schulsituation & Verlauf',
+      description: 'Anteil der Fälle mit dokumentierter schulischer Beeinträchtigung',
+      totalItemsInPool: 1,
       countFn: (c: KizFormData) => {
         const sch = c.schulsituation || {};
-        return Object.values(sch).filter((e) => e && (e.selected || (e.beschreibung && e.beschreibung.trim().length > 0))).length;
+        const concernCodes = ['3.1.2', '3.1.3', '3.1.4', '3.2.1', '3.2.2', '3.2.3', '3.2.4'];
+        return concernCodes.some((code) => !!sch[code]?.selected) || c.schulsituationDetails?.suspensions === true ? 1 : 0;
       },
     },
     {
@@ -505,51 +506,57 @@ export function computeChapterDrillDown(
 
     case 'school':
       chapterId = 3;
-      title = '3. Schulsituation & Absentismus';
-      shortTitle = 'Schulgefährdung';
-      description = 'Schulische Verhaltens-, Leistungs- und Disziplinarmuster';
+      title = '3. Schulsituation & Verlauf';
+      shortTitle = 'Schulsituation';
+      description = 'Verteilung der aktuellen Schulsituation, der Art des Wegbleibens und des schulischen Verlaufs';
       subcatDefs = [
+        ...['3.1.1', '3.1.2', '3.1.3', '3.1.4', '3.1.5', '3.2.1', '3.2.2', '3.2.3', '3.2.4', '3.3.1', '3.3.2', '3.3.3'].map((code) => {
+          const item = CHAPTERS.find((chapter) => chapter.id === 3)?.sections?.flatMap((section) => section.items).find((candidate) => candidate.code === code);
+          const labels: Record<string, string> = {
+            '3.1.1': 'Regulärer Schulbesuch',
+            '3.1.2': 'Leichte Beeinträchtigung / unregelmäßiger Besuch',
+            '3.1.3': 'Ausgeprägte Fehlzeiten / deutliche Beeinträchtigung',
+            '3.1.4': 'Massiver / weitgehender Schulabsentismus',
+            '3.1.5': 'Aktuell kein regulärer Schulbesuch / Sonder- oder Ersatzsetting',
+          };
+          const descriptions: Record<string, string> = {
+            '3.1.1': 'Kaum oder keine relevanten Fehlzeiten, Teilnahme weitgehend gegeben',
+            '3.1.2': 'Einzelne versäumte Stunden oder Tage, insgesamt noch tragfähig',
+            '3.1.3': 'Wiederholte Ausfälle oder spürbare Einschränkung der Teilhabe',
+            '3.1.4': 'Überwiegendes bis vollständiges Fernbleiben vom vorgesehenen Unterricht',
+            '3.1.5': 'Ruhen der Beschulung, Klinik-/Einrichtungsbeschulung oder stark reduziertes Setting',
+          };
+          return {
+            code,
+            label: labels[code] || item?.label || code,
+            shortLabel: labels[code] || item?.label || code,
+            description: descriptions[code] || item?.description || '',
+            checkFn: (c: KizFormData) => !!c.schulsituation?.[code]?.selected,
+          };
+        }),
+        ...[
+          { code: 'trend-increasing', label: 'Entwicklungstendenz: zunehmend prekär', trend: 'zunehmend prekär' },
+          { code: 'trend-stable', label: 'Entwicklungstendenz: gleichbleibend', trend: 'gleichbleibend' },
+          { code: 'trend-fluctuating', label: 'Entwicklungstendenz: schwankend', trend: 'schwankend' },
+          { code: 'trend-improving', label: 'Entwicklungstendenz: rückläufig / bessernd', trend: 'rückläufig / bessernd' },
         {
-          code: '3.1.1',
-          label: 'Schulabsentismus & Schulverweigerung',
-          shortLabel: 'Schulabsentismus',
-          description: 'Schwänzen, Verweigerung und langwierige Fehlzeiten',
-          checkFn: (c) => !!c.schulsituation?.['3.1.1']?.selected,
-        },
-        {
-          code: '3.1.2',
-          label: 'Auffälliges Verhalten im Unterricht',
-          shortLabel: 'Unterrichtsstörung',
-          description: 'Störungen, Ruhelosigkeit, Impulsivität im Klassenverband',
-          checkFn: (c) => !!c.schulsituation?.['3.1.2']?.selected,
-        },
-        {
-          code: '3.1.3',
-          label: 'Deutlicher Leistungsabfall & Notenverschlechterung',
-          shortLabel: 'Leistungsabfall',
-          description: 'Plötzlicher oder stetiger Abfall schulischer Kompetenzen',
-          checkFn: (c) => !!c.schulsituation?.['3.1.3']?.selected,
-        },
-        {
-          code: '3.1.4',
-          label: 'Wiederholte Ordnungsmaßnahmen & Suspendierungen',
-          shortLabel: 'Suspendierungen',
-          description: 'Disziplinarmaßnahmen, Teilausschlüsse und Schulausschlüsse',
-          checkFn: (c) => !!c.schulsituation?.['3.1.4']?.selected,
-        },
-        {
-          code: '3.1.5',
-          label: 'Konflikte mit Lehrkräften & Mitschülern',
-          shortLabel: 'Schulkonflikte',
-          description: 'Massive Streitigkeiten, Aggressionen oder Mobbing in der Schule',
-          checkFn: (c) => !!c.schulsituation?.['3.1.5']?.selected,
-        },
-        {
-          code: '3.1.6',
-          label: 'Drohende oder bestehende Schulunfähigkeit',
-          shortLabel: 'Schulunfähigkeit',
-          description: 'Beschulung im Regelsystem aktuell nicht mehr tragfähig',
-          checkFn: (c) => !!c.schulsituation?.['3.1.6']?.selected,
+      subcatDefs.push(
+        ...[
+          { code: 'suspensions-yes', label: 'Suspendierungen / schulische Ausschlüsse: Ja', shortLabel: 'Suspendierungen: Ja', value: true },
+          { code: 'suspensions-no', label: 'Suspendierungen / schulische Ausschlüsse: Nein', shortLabel: 'Suspendierungen: Nein', value: false },
+        ].map(({ code, label, shortLabel, value }) => ({
+          code,
+          label,
+          shortLabel,
+          description: 'Suspendierungen oder schulische Ausschlüsse',
+          checkFn: (c: KizFormData) => c.schulsituationDetails?.suspensions === value,
+        }))
+      );
+          code: 'suspensions-no',
+          label: 'Suspendierungen / schulische Ausschlüsse: Nein',
+          shortLabel: 'Suspendierungen: Nein',
+          description: 'Es wurden keine Suspendierungen oder schulischen Ausschlüsse berichtet',
+          checkFn: (c) => c.schulsituationDetails?.suspensions === false,
         },
       ];
       break;
@@ -1069,6 +1076,27 @@ export function computeAggregatedAnalytics(cases: KizFormData[]): AggregatedAnal
     });
   }
 
+  const schoolDetailStats = [
+    ...[
+      { code: 'school-trend-increasing', label: 'Entwicklungstendenz: zunehmend prekär', matches: (c: KizFormData) => c.schulsituationDetails?.trend === 'zunehmend prekär' },
+      { code: 'school-trend-stable', label: 'Entwicklungstendenz: gleichbleibend', matches: (c: KizFormData) => c.schulsituationDetails?.trend === 'gleichbleibend' },
+      { code: 'school-trend-fluctuating', label: 'Entwicklungstendenz: schwankend', matches: (c: KizFormData) => c.schulsituationDetails?.trend === 'schwankend' },
+      { code: 'school-trend-improving', label: 'Entwicklungstendenz: rückläufig / bessernd', matches: (c: KizFormData) => c.schulsituationDetails?.trend === 'rückläufig / bessernd' },
+      { code: 'school-suspensions-yes', label: 'Suspendierungen / schulische Ausschlüsse: Ja', matches: (c: KizFormData) => c.schulsituationDetails?.suspensions === true },
+      { code: 'school-suspensions-no', label: 'Suspendierungen / schulische Ausschlüsse: Nein', matches: (c: KizFormData) => c.schulsituationDetails?.suspensions === false },
+    ],
+  ];
+  schoolDetailStats.forEach(({ code, label }) => itemStatsMap.set(code, {
+    code,
+    label,
+    chapterId: 3,
+    chapterTitle: '3. Schulsituation & Verlauf',
+    sectionTitle: '3.1 Aktuelle Schulsituation (Schweregrad & Präsenz)',
+    totalOccurrences: 0,
+    percentage: 0,
+    casesWithItem: [],
+  }));
+
   let totalItemsMarkedAcrossAll = 0;
   let completedCount = 0;
 
@@ -1098,6 +1126,15 @@ export function computeAggregatedAnalytics(cases: KizFormData[]): AggregatedAnal
         }
       });
     }
+
+    schoolDetailStats.forEach(({ code, matches }) => {
+      if (!matches(c)) return;
+      const stat = itemStatsMap.get(code);
+      if (stat) {
+        stat.totalOccurrences++;
+        stat.casesWithItem.push(c.stammdaten?.chiffre || c.id);
+      }
+    });
 
     totalItemsMarkedAcrossAll += caseItemCount;
   });

@@ -5,6 +5,8 @@ import { ItemEntry } from '../types/anamnese';
 interface ProtocolItemRowProps {
   code: string;
   label: string;
+  description?: string;
+  selectionType?: 'single' | 'multiple';
   entry?: ItemEntry;
   onChange: (newEntry: ItemEntry) => void;
   hasDauer?: boolean;
@@ -18,6 +20,8 @@ interface ProtocolItemRowProps {
 export const ProtocolItemRow: React.FC<ProtocolItemRowProps> = ({
   code,
   label,
+  description,
+  selectionType = 'multiple',
   entry,
   onChange,
   hasDauer,
@@ -50,7 +54,7 @@ export const ProtocolItemRow: React.FC<ProtocolItemRowProps> = ({
   );
 
   const toggleSelect = () => {
-    const nextSelected = !isSelected;
+    const nextSelected = selectionType === 'single' ? true : !isSelected;
     onChange({
       selected: nextSelected,
       dauer: entry?.dauer || '',
@@ -125,7 +129,8 @@ export const ProtocolItemRow: React.FC<ProtocolItemRowProps> = ({
       {/* Primary Tap Area for Tablet */}
       <div className="p-3 sm:p-4 touch-pan-y">
         <div
-          role="button"
+          role={selectionType === 'single' ? 'radio' : 'checkbox'}
+          aria-checked={isSelected}
           tabIndex={0}
           onClick={toggleSelect}
           onKeyDown={(e) => {
@@ -136,15 +141,15 @@ export const ProtocolItemRow: React.FC<ProtocolItemRowProps> = ({
           }}
           className="w-full text-left flex items-start gap-3 cursor-pointer touch-pan-y"
         >
-          {/* Custom Large Checkbox (Finger-friendly min 32px) */}
+          {/* Selection indicator */}
           <div
-            className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center shrink-0 border-2 transition-all mt-0.5 ${
+            className={`w-7 h-7 sm:w-8 sm:h-8 ${selectionType === 'single' ? 'rounded-full' : 'rounded-lg'} flex items-center justify-center shrink-0 border-2 transition-all mt-0.5 ${
               isSelected
                 ? 'bg-amber-600 border-amber-600 text-white shadow-xs'
                 : 'bg-slate-50 border-slate-300 text-transparent hover:border-slate-400'
             }`}
           >
-            <Check className="w-4 h-4 stroke-[3]" />
+            {isSelected && (selectionType === 'single' ? <span className="w-2.5 h-2.5 rounded-full bg-white" /> : <Check className="w-4 h-4 stroke-[3]" />)}
           </div>
 
           <div className="min-w-0 flex-1">
@@ -164,6 +169,9 @@ export const ProtocolItemRow: React.FC<ProtocolItemRowProps> = ({
             {sublabel && (
               <p className="text-xs text-slate-500 mt-1">{sublabel}</p>
             )}
+            {description && (
+              <p className="text-xs sm:text-sm text-slate-600 mt-1.5 leading-relaxed">{description}</p>
+            )}
 
             {/* Structured Duration indicator */}
             {entry?.dauer && !hasDauer && (
@@ -175,6 +183,22 @@ export const ProtocolItemRow: React.FC<ProtocolItemRowProps> = ({
             )}
           </div>
         </div>
+
+        {hasBeschreibung && isSelected && (
+          <div className="mt-3 pt-2.5 border-t border-amber-200/70">
+            <label htmlFor={`note-${code}`} className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Ergänzende Angaben (optional)
+            </label>
+            <textarea
+              id={`note-${code}`}
+              value={entry?.beschreibung || ''}
+              onChange={(e) => onChange({ ...entry, selected: true, beschreibung: e.target.value })}
+              placeholder={placeholder || 'Beobachtungen, Beispiele oder Kontext...'}
+              rows={2}
+              className="w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 resize-y"
+            />
+          </div>
+        )}
 
         {/* Structured numeric Duration Input (Chapter 2 only, no free text) */}
         {hasDauer && isSelected && (

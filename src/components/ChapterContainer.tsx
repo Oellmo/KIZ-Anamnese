@@ -109,16 +109,30 @@ export const ChapterContainer: React.FC<ChapterContainerProps> = ({
   const handleItemChange = (
     category: 'vorangegangeneHilfen' | 'schulsituation' | 'psychosozial' | 'entwicklungsstand' | 'symptomatik' | 'somatisch',
     code: string,
-    entry: ItemEntry
+    entry: ItemEntry,
+    exclusiveCodes?: string[]
   ) => {
+    const updatedCategory = { ...(formData[category] as Record<string, ItemEntry>), [code]: entry };
+    if (entry.selected && exclusiveCodes) {
+      exclusiveCodes.forEach((exclusiveCode) => {
+        if (exclusiveCode !== code) {
+          updatedCategory[exclusiveCode] = { ...updatedCategory[exclusiveCode], selected: false, beschreibung: '', selectedOptions: [] };
+        }
+      });
+    }
     onChange({
       ...formData,
       updatedAt: new Date().toISOString(),
       [category]: {
-        ...formData[category],
-        [code]: entry,
+        ...updatedCategory,
       },
     });
+  };
+
+  const updateSchulsituationDetails = (key: 'trend' | 'suspensions' | 'suspensionsNotiz', value: string | boolean) => {
+    const details = { ...formData.schulsituationDetails, [key]: value };
+    if (key === 'suspensions' && value === false) details.suspensionsNotiz = '';
+    onChange({ ...formData, updatedAt: new Date().toISOString(), schulsituationDetails: details });
   };
 
   // RENDER CHAPTER 0: STAMMDATEN
@@ -828,7 +842,10 @@ export const ChapterContainer: React.FC<ChapterContainerProps> = ({
         return e && e.selected;
       }).length
     );
-  }, 0) + (currentChapterId === 5 && formData.iqSelectedCode ? 1 : 0);
+  }, 0)
+    + (currentChapterId === 5 && formData.iqSelectedCode ? 1 : 0)
+    + (currentChapterId === 3 && formData.schulsituationDetails?.trend ? 1 : 0)
+    + (currentChapterId === 3 && formData.schulsituationDetails?.suspensions !== undefined ? 1 : 0);
 
   return (
     <div className="space-y-5 max-w-4xl mx-auto pb-6">
@@ -878,7 +895,9 @@ export const ChapterContainer: React.FC<ChapterContainerProps> = ({
           </button>
           {sections.map((sec) => {
             const isSecActive = activeSectionId === sec.id;
-            const secMarkedCount = sec.items.filter((item) => categoryData[item.code]?.selected).length;
+            const secMarkedCount = sec.items.filter((item) => categoryData[item.code]?.selected || !!categoryData[item.code]?.beschreibung?.trim()).length
+              + (currentChapterId === 3 && sec.id === '3.1' && formData.schulsituationDetails?.trend ? 1 : 0)
+              + (currentChapterId === 3 && sec.id === '3.1' && formData.schulsituationDetails?.suspensions !== undefined ? 1 : 0);
             return (
               <button
                 key={sec.id}
@@ -906,10 +925,12 @@ export const ChapterContainer: React.FC<ChapterContainerProps> = ({
       <div className="space-y-5">
         {visibleSections.map((sec) => {
           const displayedItems = filterOnlyMarked
-            ? sec.items.filter((item) => categoryData[item.code]?.selected)
+            ? sec.items.filter((item) => categoryData[item.code]?.selected || !!categoryData[item.code]?.beschreibung?.trim())
             : sec.items;
 
-          if (filterOnlyMarked && displayedItems.length === 0) {
+          const hasSectionDetails = currentChapterId === 3 && sec.id === '3.1'
+            && (formData.schulsituationDetails?.trend || formData.schulsituationDetails?.suspensions !== undefined);
+          if (filterOnlyMarked && displayedItems.length === 0 && !hasSectionDetails) {
             return null;
           }
 
@@ -924,14 +945,19 @@ export const ChapterContainer: React.FC<ChapterContainerProps> = ({
                 </span>
               </div>
 
+              {sec.description && <p className="text-xs text-slate-600 -mt-1">{sec.description}</p>}
+
               <div className="space-y-2.5">
                 {displayedItems.map((item) => {
                   const entry = categoryData[item.code];
+                  const exclusiveCodes = sec.selectionType === 'single' ? sec.items.map((option) => option.code) : undefined;
                   return (
                     <ProtocolItemRow
                       key={item.code}
                       code={item.code}
                       label={item.label}
+                      description={item.description}
+                      selectionType={sec.selectionType || item.selectionType}
                       hasDauer={item.hasDauer}
                       hasBeschreibung={item.hasBeschreibung}
                       placeholder={item.placeholder}
@@ -939,11 +965,41 @@ export const ChapterContainer: React.FC<ChapterContainerProps> = ({
                       dropdownOptions={item.dropdownOptions}
                       dropdownSelectionMode={item.dropdownSelectionMode}
                       entry={entry}
-                      onChange={(newEntry) => handleItemChange(currentCategory, item.code, newEntry)}
+                      onChange={(newEntry) => handleItemChange(currentCategory, item.code, newEntry, exclusiveCodes)}
                     />
                   );
                 })}
               </div>
+
+              {currentChapterId === 3 && sec.id === '3.1' && (
+                <div className="grid gap-4 border-t border-slate-100 pt-4 sm:grid-cols-2">
+                  <fieldset>
+                    <legend className="text-xs font-bold text-slate-700 mb-2">Entwicklungstendenz aktuell</legend>
+                    <div className="space-y-2">
+                      {['zunehmend prekär', 'gleichbleibend', 'schwankend', 'rückläufig / bessernd'].map((trend) => (
+                        <label key={trend} className="flex items-center gap-2 text-sm text-slate-700">
+                          <input type="radio" name="school-trend" checked={formData.schulsituationDetails?.trend === trend} onChange={() => updateSchulsituationDetails('trend', trend)} className="h-4 w-4 accent-emerald-700" />
+                          {trend}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                  <fieldset>
+                    <legend className="text-xs font-bold text-slate-700 mb-2">Suspendierungen / schulische Ausschlüsse</legend>
+                    <div className="flex gap-4">
+                      {([{ label: 'Ja', value: true }, { label: 'Nein', value: false }] as const).map(({ label, value }) => (
+                        <label key={label} className="flex items-center gap-2 text-sm text-slate-700">
+                          <input type="radio" name="school-suspensions" checked={formData.schulsituationDetails?.suspensions === value} onChange={() => updateSchulsituationDetails('suspensions', value)} className="h-4 w-4 accent-emerald-700" />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                    {formData.schulsituationDetails?.suspensions === true && (
+                      <textarea value={formData.schulsituationDetails.suspensionsNotiz || ''} onChange={(event) => updateSchulsituationDetails('suspensionsNotiz', event.target.value)} placeholder="Anzahl, Anlass oder Zeitraum (optional)..." rows={2} className="mt-3 w-full px-3 py-2 text-sm bg-white border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 resize-y" />
+                    )}
+                  </fieldset>
+                </div>
+              )}
             </div>
           );
         })}
