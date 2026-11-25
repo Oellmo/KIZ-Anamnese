@@ -1,4 +1,4 @@
-import { KizFormData } from '../types/anamnese';
+import { ItemDefinition, ItemEntry, KizFormData } from '../types/anamnese';
 import { 
   CHAPTERS, 
   IQ_LEVELS, 
@@ -41,6 +41,7 @@ export interface RadarDimensionScore {
   totalCasesAffected: number;   // number of clients affected
   topItemLabel?: string;        // most frequent item in this domain
   singleCaseScore?: number;     // 0 to 100 score for single comparison case
+  singleCasePrevalenceScore?: number;
   singleCaseCount?: number;     // items marked in single comparison case
 }
 
@@ -56,9 +57,13 @@ export interface RadarSubcategoryScore {
   shortLabel: string;
   sectionTitle?: string;
   prevalencePercentage: number; // 0 to 100% of cohort affected
+  intensityPercentage?: number;
+  averageItems?: number;
   totalCasesAffected: number;
   singleCasePresent?: boolean;
+  singleCaseCount?: number;
   singleCaseScore?: number; // 0 or 100%
+  singleCasePrevalenceScore?: number;
   description?: string;
   dropdownOptions?: string[];
   optionsFrequencies?: OptionFrequency[];
@@ -72,6 +77,10 @@ export interface ChapterDrillDownResult {
   description: string;
   totalCases: number;
   subcategories: RadarSubcategoryScore[];
+}
+
+export interface StructuredRadarLevelResult extends ChapterDrillDownResult {
+  level: 'sections' | 'items';
 }
 
 export interface AggregatedAnalytics {
@@ -252,6 +261,368 @@ export function computeRadarProfile(cases: KizFormData[], singleCase?: KizFormDa
     dimensions,
     totalCases,
     overallBurdenIndex,
+  };
+}
+
+interface StructuredRadarItem {
+  code: string;
+  label: string;
+  shortLabel: string;
+  description?: string;
+  dropdownOptions?: string[];
+  includeInDomainMetric?: boolean;
+  exclusiveGroup?: string;
+  check: (c: KizFormData) => boolean;
+  optionEntry?: (c: KizFormData) => { selectedOptions?: string[]; beschreibung?: string } | undefined;
+}
+
+interface StructuredRadarSection {
+  code: string;
+  label: string;
+  shortLabel: string;
+  description?: string;
+  items: StructuredRadarItem[];
+}
+
+interface StructuredRadarDimension {
+  id: string;
+  label: string;
+  shortLabel: string;
+  chapterId: number;
+  description: string;
+  sections: StructuredRadarSection[];
+  detailSections?: StructuredRadarSection[];
+  directItemLevel?: boolean;
+}
+
+const STRUCTURED_DIMENSION_IDS = [
+  'legal', 'priorHelp', 'school', 'psychosocial', 'neuro', 'psychiatric', 'conduct', 'organic',
+] as const;
+
+function createStructuredRadarDimensions(): StructuredRadarDimension[] {
+  const chapter = (id: number) => CHAPTERS.find((entry) => entry.id === id);
+  const makeItem = (chapterId: number, item: ItemDefinition): StructuredRadarItem => {
+    const getEntry = (c: KizFormData): ItemEntry | undefined => {
+      switch (chapterId) {
+        case 2: return c.vorangegangeneHilfen?.[item.code];
+        case 3: return c.schulsituation?.[item.code];
+        case 4: return c.psychosozial?.[item.code];
+        case 5: return c.entwicklungsstand?.[item.code];
+        case 6: return c.symptomatik?.[item.code];
+        case 7: return c.somatisch?.[item.code];
+        default: return undefined;
+      }
+    };
+    return {
+      code: item.code,
+      label: item.label,
+      shortLabel: item.label,
+      description: item.description,
+      dropdownOptions: item.dropdownOptions,
+      check: (c) => !!getEntry(c)?.selected || !!getEntry(c)?.beschreibung?.trim(),
+      optionEntry: getEntry,
+    };
+  };
+  const chapterSections = (chapterId: number): StructuredRadarSection[] => (chapter(chapterId)?.sections || []).map((section) => ({
+    code: section.id,
+    label: section.title.replace(/^\d+(?:\.\d+)*\s*/, ''),
+    shortLabel: section.title.replace(/^\d+(?:\.\d+)*\s*/, ''),
+    description: section.description,
+    items: section.items.map((item) => ({
+      ...makeItem(chapterId, item),
+      includeInDomainMetric: !(chapterId === 3 && item.code === '3.1.1'),
+      exclusiveGroup: chapterId === 3 && /^3\.1\.[1-5]$/.test(item.code) ? 'school-current-situation' : undefined,
+    })),
+  }));
+
+  const legalItems: StructuredRadarItem[] = [
+    ...SORGERECHT_OPTIONS.map((option) => ({
+      code: `1.sorge.${option.id}`, label: option.label, shortLabel: option.label,
+      includeInDomainMetric: option.id !== 'gemeinsam',
+      exclusiveGroup: 'legal-custody',
+      check: (c: KizFormData) => (c.rechtlicherStatus?.sorgerecht || []).includes(option.id),
+    })),
+    ...GESUNDHEITSFUERSORGE_OPTIONS.map((option) => ({
+      code: `1.gesundheit.${option.id}`, label: option.label, shortLabel: option.label,
+      includeInDomainMetric: option.id !== 'sorgeberechtigte',
+      exclusiveGroup: 'legal-healthcare',
+      check: (c: KizFormData) => (c.rechtlicherStatus?.gesundheitsfuersorge || []).includes(option.id),
+    })),
+  ];
+  const sections6 = chapterSections(6);
+  const behaviorSections = sections6.filter((section) => section.code === '6.3' || section.code === '6.4');
+  const behaviorItems = behaviorSections.flatMap((section) => section.items);
+  const behaviorItemsSection: StructuredRadarSection = {
+    code: '6.3',
+    label: 'Spezifizierung: Störung des Sozialverhaltens (F91)',
+    shortLabel: 'Störung des Sozialverhaltens (F91)',
+    items: behaviorItems,
+  };
+  const behaviorSummarySection: StructuredRadarSection = {
+    code: '6.3',
+    label: behaviorItemsSection.label,
+    shortLabel: behaviorItemsSection.shortLabel,
+    description: 'Alle Kriterien 6.3.1–6.3.14 sowie 6.4.1–6.4.6.',
+    items: [{
+      code: 'conduct-summary',
+      label: behaviorItemsSection.label,
+      shortLabel: behaviorItemsSection.shortLabel,
+      check: (c) => behaviorItems.some((item) => item.check(c)),
+    }],
+  };
+  const developmentSections = chapterSections(5);
+  const developmentalSection = developmentSections.find((section) => section.code === '5.1');
+  if (developmentalSection) {
+    developmentalSection.label = 'Entwicklungsstörungen';
+    developmentalSection.shortLabel = 'Entwicklungsstörungen';
+  }
+  const chapter7Sections = chapterSections(7);
+  const actualSomaticSection = chapter7Sections.find((section) => section.code === '7.1');
+  if (actualSomaticSection) {
+    actualSomaticSection.label = 'Neurologische & organische Ursachen';
+    actualSomaticSection.shortLabel = 'Neurologisch & organisch';
+  }
+  const schoolSections = chapterSections(3);
+  const iqItems: StructuredRadarItem[] = IQ_LEVELS.map((level) => ({
+    code: level.code,
+    label: level.label,
+    shortLabel: level.label,
+    description: level.code === '5.2.3'
+      ? 'Diese IQ-Einstufung wird für die Verteilung angezeigt, ist aber kein abweichender IQ-Befund.'
+      : 'Dokumentierte Einstufung des Intelligenzniveaus.',
+    includeInDomainMetric: level.code !== '5.2.3',
+    exclusiveGroup: 'iq-level',
+    check: (c) => c.iqSelectedCode === level.code || !!c.entwicklungsstand?.[level.code]?.selected,
+  }));
+  const iqSection = developmentSections.find((section) => section.code === '5.2');
+  if (iqSection) iqSection.items = iqItems;
+  else developmentSections.push({
+    code: '5.2',
+    label: 'Intelligenzniveau',
+    shortLabel: 'Intelligenzniveau',
+    description: 'Verteilung der dokumentierten IQ-Einstufungen.',
+    items: iqItems,
+  });
+  const somaticSections = chapter7Sections.flatMap((section) => section.items);
+  // The Markdown defines chapter 7 directly as its seven listed radar spokes.
+  const somaticItemsSection: StructuredRadarSection = {
+    code: '7', label: 'Neurologische & organische Ursachen', shortLabel: 'Neurologisch & organisch', items: somaticSections,
+  };
+  const currentSchoolSection = schoolSections.find((section) => section.code === '3.1');
+  if (currentSchoolSection) {
+    currentSchoolSection.label = 'Aktuelle Schulsituation';
+    currentSchoolSection.shortLabel = 'Aktuelle Schulsituation';
+    const trendOptions = [
+      'zunehmend prekär',
+      'gleichbleibend',
+      'schwankend',
+      'rückläufig / bessernd',
+    ];
+    currentSchoolSection.items.push(...trendOptions.map((trend) => ({
+      code: `3.1.trend.${trend}`,
+      label: `Entwicklungstendenz: ${trend}`,
+      shortLabel: `Tendenz: ${trend}`,
+      description: 'Entwicklungstendenz der aktuellen Schulsituation.',
+      includeInDomainMetric: false,
+      check: (c: KizFormData) => c.schulsituationDetails?.trend === trend,
+    })));
+    currentSchoolSection.items.push({
+      code: '3.1.suspensions.yes',
+      label: 'Suspendierungen / schulische Ausschlüsse: Ja',
+      shortLabel: 'Suspendierungen: Ja',
+      description: 'Suspendierungen oder schulische Ausschlüsse sind dokumentiert.',
+      includeInDomainMetric: false,
+      check: (c: KizFormData) => c.schulsituationDetails?.suspensions === true,
+    });
+    currentSchoolSection.items.push({
+      code: '3.1.suspensions.no',
+      label: 'Suspendierungen / schulische Ausschlüsse: Nein',
+      shortLabel: 'Suspendierungen: Nein',
+      description: 'Es wurden keine Suspendierungen oder schulischen Ausschlüsse dokumentiert.',
+      includeInDomainMetric: false,
+      check: (c: KizFormData) => c.schulsituationDetails?.suspensions === false,
+    });
+  }
+  return [
+    { id: STRUCTURED_DIMENSION_IDS[0], label: 'Rechtlicher Status', shortLabel: 'Rechtlicher Status', chapterId: 1, description: 'Sorgerecht und Gesundheitsfürsorge.', sections: [
+      { code: '1.1', label: 'Sorgerecht', shortLabel: 'Sorgerecht', items: legalItems.slice(0, SORGERECHT_OPTIONS.length) },
+      { code: '1.2', label: 'Gesundheitsfürsorge', shortLabel: 'Gesundheitsfürsorge', items: legalItems.slice(SORGERECHT_OPTIONS.length) },
+    ] },
+    { id: STRUCTURED_DIMENSION_IDS[1], label: 'Vorangegangene Hilfen', shortLabel: 'Hilfen', chapterId: 2, description: 'Hilfen zur Erziehung und Eingliederung, Rehabilitation und therapeutisch-pädagogische Maßnahmen.', sections: chapterSections(2) },
+    { id: STRUCTURED_DIMENSION_IDS[2], label: 'Schulsituation', shortLabel: 'Schule', chapterId: 3, description: 'Aktuelle Schulsituation, Art und Funktion des Wegbleibens sowie Schullaufbahn.', sections: schoolSections },
+    { id: STRUCTURED_DIMENSION_IDS[3], label: 'Psychosoziale Umstände', shortLabel: 'Psychosozial', chapterId: 4, description: 'Psychosoziale und familiäre Umstände.', sections: chapterSections(4) },
+    { id: STRUCTURED_DIMENSION_IDS[4], label: 'Neurodivergenz', shortLabel: 'Neurodivergenz', chapterId: 5, description: 'Entwicklungsstörungen und Intelligenzniveau.', sections: developmentSections },
+    {
+      id: STRUCTURED_DIMENSION_IDS[5],
+      label: 'Psychiatrische Symptomatik',
+      shortLabel: 'Psychiatrie',
+      chapterId: 6,
+      description: 'Psychiatrische Diagnosen und Substanzkonsum; Sozialverhalten wird getrennt ausgewertet.',
+      sections: sections6.filter((section) => section.code === '6.1' || section.code === '6.2'),
+    },
+    {
+      id: STRUCTURED_DIMENSION_IDS[6],
+      label: 'Störung des Sozialverhaltens',
+      shortLabel: 'Sozialverhalten',
+      chapterId: 6,
+      description: 'Eigenständiger Bereich mit allen Kriterien 6.3.1–6.3.14 und 6.4.1–6.4.6.',
+      sections: [behaviorSummarySection],
+      detailSections: [behaviorItemsSection],
+    },
+    { id: STRUCTURED_DIMENSION_IDS[7], label: 'Neurologische & organische Ursachen', shortLabel: 'Neurologisch / organisch', chapterId: 7, description: 'Einzelkriterien aus den Bereichen 7.1, 7.2 und 7.3.', sections: [somaticItemsSection], directItemLevel: true },
+  ];
+}
+
+function summarizeStructuredItems(items: StructuredRadarItem[], cases: KizFormData[], singleCase?: KizFormData, useDomainMetricItems = false) {
+  const metricItems = useDomainMetricItems ? items.filter((item) => item.includeInDomainMetric !== false) : items;
+  const groupByExclusiveChoice = (selected: StructuredRadarItem[]) => {
+    const groupCounts = new Map<string, number>();
+    for (const item of selected) {
+      if (item.exclusiveGroup) groupCounts.set(item.exclusiveGroup, (groupCounts.get(item.exclusiveGroup) || 0) + 1);
+    }
+    return selected.length - [...groupCounts.values()].reduce((sum, count) => sum + Math.max(0, count - 1), 0);
+  };
+  const caseCount = (c: KizFormData) => groupByExclusiveChoice(metricItems.filter((item) => item.check(c)));
+  const prevalenceItems = useDomainMetricItems
+    ? metricItems.filter((item) => !item.exclusiveGroup || !metricItems.some((other) => other.exclusiveGroup === item.exclusiveGroup && other.includeInDomainMetric === false))
+    : metricItems;
+  const metricPoolSize = (() => {
+    const groups = new Set(metricItems.map((item) => item.exclusiveGroup).filter((group): group is string => !!group));
+    return metricItems.length - [...groups].reduce((removed, group) => {
+      const groupSize = metricItems.filter((item) => item.exclusiveGroup === group).length;
+      return removed + Math.max(0, groupSize - 1);
+    }, 0);
+  })();
+  const affectedCases = cases.filter((c) => caseCount(c) > 0);
+  const totalMarked = cases.reduce((sum, c) => sum + caseCount(c), 0);
+  return {
+    prevalencePercentage: cases.length
+      ? Math.round((cases.filter((c) => prevalenceItems.some((item) => item.check(c))).length / cases.length) * 100)
+      : 0,
+    intensityPercentage: cases.length && metricPoolSize ? Math.min(100, Math.round((totalMarked / cases.length / metricPoolSize) * 100)) : 0,
+    averageItems: cases.length ? Number((totalMarked / cases.length).toFixed(1)) : 0,
+    totalCasesAffected: affectedCases.length,
+    singleCasePresent: singleCase ? caseCount(singleCase) > 0 : undefined,
+    singleCaseScore: singleCase && metricPoolSize ? Math.min(100, Math.round((caseCount(singleCase) / metricPoolSize) * 100)) : undefined,
+    singleCaseCount: singleCase ? caseCount(singleCase) : undefined,
+    singleCasePrevalenceScore: singleCase ? (caseCount(singleCase) > 0 ? 100 : 0) : undefined,
+  };
+}
+
+export function computeStructuredRadarProfile(cases: KizFormData[], singleCase?: KizFormData): RadarProfileResult {
+  if (!cases.length) return { dimensions: [], totalCases: 0, overallBurdenIndex: 0 };
+  const dimensions = createStructuredRadarDimensions().map((definition): RadarDimensionScore => {
+    const items = definition.sections.flatMap((section) => section.items)
+      .filter((item) => item.includeInDomainMetric !== false);
+    const score = summarizeStructuredItems(items, cases, singleCase);
+    return {
+      id: definition.id,
+      label: definition.label,
+      shortLabel: definition.shortLabel,
+      chapterId: definition.chapterId,
+      chapterTitle: `${definition.chapterId}. ${definition.label}`,
+      description: definition.description,
+      prevalencePercentage: score.prevalencePercentage,
+      intensityPercentage: score.intensityPercentage,
+      averageItems: score.averageItems,
+      totalCasesAffected: score.totalCasesAffected,
+      singleCaseScore: score.singleCaseScore,
+      singleCasePrevalenceScore: score.singleCasePrevalenceScore,
+      singleCaseCount: score.singleCaseCount,
+    };
+  });
+  return {
+    dimensions,
+    totalCases: cases.length,
+    overallBurdenIndex: Math.round(dimensions.reduce((sum, item) => sum + item.prevalencePercentage, 0) / dimensions.length),
+  };
+}
+
+export function computeStructuredRadarLevel(
+  dimensionId: string,
+  sectionCode: string | null,
+  cases: KizFormData[],
+  singleCase?: KizFormData,
+): StructuredRadarLevelResult | null {
+  const dimension = createStructuredRadarDimensions().find((item) => item.id === dimensionId);
+  if (!dimension) return null;
+
+  const isCombinedConductItems = dimension.id === 'conduct' && sectionCode === '6.3';
+  const sections = sectionCode
+    ? (isCombinedConductItems ? dimension.detailSections : dimension.sections).filter((section) => section?.code === sectionCode)
+    : dimension.sections;
+  if (!sections || !sections.length) return null;
+  const atItemLevel = !!dimension.directItemLevel || !!sectionCode;
+
+  const subcategories: RadarSubcategoryScore[] = atItemLevel
+    ? sections.flatMap((section) => section.items.map((item) => {
+      const score = summarizeStructuredItems([item], cases, singleCase);
+      const optionsFrequencies = item.dropdownOptions?.map((option) => {
+        const target = option.trim().toLocaleLowerCase();
+        const matching = cases.filter((c) => {
+          const entry = item.optionEntry?.(c);
+          return item.check(c) && (!!entry?.selectedOptions?.some((value) => value.trim().toLocaleLowerCase() === target)
+            || !!entry?.beschreibung?.toLocaleLowerCase().includes(target));
+        });
+        const singleEntry = singleCase ? item.optionEntry?.(singleCase) : undefined;
+        return {
+          option,
+          count: matching.length,
+          percentage: cases.length ? Math.round((matching.length / cases.length) * 100) : 0,
+          percentageOfAffected: score.totalCasesAffected ? Math.round((matching.length / score.totalCasesAffected) * 100) : 0,
+          casesWithOption: matching.map((c) => c.stammdaten?.chiffre || c.id),
+          singleCaseHasOption: singleCase ? (!!singleEntry?.selectedOptions?.some((value) => value.trim().toLocaleLowerCase() === target)
+            || !!singleEntry?.beschreibung?.toLocaleLowerCase().includes(target)) : undefined,
+        };
+      });
+      const isAverageIqLevel = item.code === '5.2.3';
+      return {
+        code: item.code,
+        label: item.label,
+        shortLabel: item.shortLabel,
+        sectionTitle: section.label,
+        description: isAverageIqLevel
+          ? 'Diese IQ-Einstufung wird für die Verteilung angezeigt, ist aber kein abweichender IQ-Befund.'
+          : item.description,
+        prevalencePercentage: score.prevalencePercentage,
+        intensityPercentage: item.includeInDomainMetric === false ? 0 : score.intensityPercentage,
+        averageItems: score.averageItems,
+        totalCasesAffected: score.totalCasesAffected,
+        singleCasePresent: score.singleCasePresent,
+        singleCaseCount: score.singleCaseCount,
+        singleCaseScore: item.includeInDomainMetric === false ? 0 : score.singleCaseScore,
+        singleCasePrevalenceScore: score.singleCasePrevalenceScore,
+        dropdownOptions: item.dropdownOptions,
+        optionsFrequencies,
+      };
+    }))
+    : sections.map((section) => {
+      const score = summarizeStructuredItems(section.items, cases, singleCase, true);
+      return {
+        code: section.code,
+        label: section.label,
+        shortLabel: section.shortLabel,
+        description: section.description,
+        prevalencePercentage: score.prevalencePercentage,
+        intensityPercentage: score.intensityPercentage,
+        averageItems: score.averageItems,
+        totalCasesAffected: score.totalCasesAffected,
+        singleCasePresent: score.singleCasePresent,
+        singleCaseCount: score.singleCaseCount,
+        singleCaseScore: score.singleCaseScore,
+        singleCasePrevalenceScore: score.singleCasePrevalenceScore,
+      };
+    });
+
+  return {
+    dimensionId,
+    chapterId: dimension.chapterId,
+    title: sectionCode ? sections[0].label : dimension.label,
+    shortTitle: sectionCode ? sections[0].shortLabel : dimension.shortLabel,
+    description: sectionCode ? (sections[0].description || `Einzelkriterien aus ${sections[0].label}.`) : dimension.description,
+    totalCases: cases.length,
+    subcategories,
+    level: atItemLevel ? 'items' : 'sections',
   };
 }
 

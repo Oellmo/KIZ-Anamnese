@@ -20,10 +20,10 @@ import {
   RadarProfileResult, 
   RadarDimensionScore, 
   RadarSubcategoryScore,
-  ChapterDrillDownResult,
   OptionFrequency,
-  computeRadarProfile,
-  computeChapterDrillDown 
+  StructuredRadarLevelResult,
+  computeStructuredRadarProfile,
+  computeStructuredRadarLevel
 } from '../utils/analyticsHelpers';
 
 interface ClientRadarChartProps {
@@ -44,9 +44,9 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
   // Single case comparison selection (Standard: '' = Kein Einzelfall-Vergleich)
   const [selectedComparisonCaseId, setSelectedComparisonCaseId] = useState<string>('');
   
-  // Drill-down chapter selection (null = top-level 7 dimensions radar)
+  // Navigation: main category -> section -> section details.
   const [drillDownId, setDrillDownId] = useState<string | null>(null);
-  const isPsychiatricDiagnosisDrillDown = drillDownId === 'symptoms-psychiatric';
+  const [selectedSectionCode, setSelectedSectionCode] = useState<string | null>(null);
 
   // Hovered or selected item for deep inspection
   const [hoveredDimensionId, setHoveredDimensionId] = useState<string | null>(null);
@@ -64,30 +64,20 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
     return cases.find((c) => c.id === selectedComparisonCaseId);
   }, [cases, selectedComparisonCaseId]);
 
-  // Top-level 7 dimensions profile
+  // Top-level dimensions follow the requested assessment hierarchy.
   const profile: RadarProfileResult = useMemo(() => {
-    return computeRadarProfile(cases, comparisonCase);
+    return computeStructuredRadarProfile(cases, comparisonCase);
   }, [cases, comparisonCase]);
 
-  // Subcategory drill-down result if a chapter is selected
-  const drillDownResult: ChapterDrillDownResult | null = useMemo(() => {
+  // First show sections; selecting one shows its individual items.
+  const drillDownResult: StructuredRadarLevelResult | null = useMemo(() => {
     if (!drillDownId) return null;
-    if (drillDownId === 'symptoms-psychiatric') {
-      const symptomsResult = computeChapterDrillDown('symptoms', cases, comparisonCase);
-      return {
-        ...symptomsResult,
-        title: '6.1 Psychiatrische Diagnosen',
-        shortTitle: 'Diagnosen (6.1.1–6.1.8)',
-        description: 'Prävalenz der psychiatrischen Diagnosekategorien 6.1.1 bis 6.1.8 im Vergleich über alle ausgewählten Fälle.',
-        subcategories: symptomsResult.subcategories.filter((subcategory) => /^6\.1\.[1-8]$/.test(subcategory.code)),
-      };
-    }
-    return computeChapterDrillDown(drillDownId, cases, comparisonCase);
-  }, [drillDownId, cases, comparisonCase]);
+    return computeStructuredRadarLevel(drillDownId, selectedSectionCode, cases, comparisonCase);
+  }, [drillDownId, selectedSectionCode, cases, comparisonCase]);
 
   const selectSubcategory = (code: string) => {
-    if (code === '6.3' && drillDownResult?.dimensionId === 'symptoms') {
-      setDrillDownId('symptoms-psychiatric');
+    if (drillDownResult?.level === 'sections') {
+      setSelectedSectionCode(code);
       setHoveredSubcatCode(null);
       setFocusedOptionSubcatCode(null);
       return;
@@ -96,6 +86,16 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
   };
 
   const dimensions = profile.dimensions;
+  const goBackOneLevel = () => {
+    if (selectedSectionCode) setSelectedSectionCode(null);
+    else {
+      setDrillDownId(null);
+      setHoveredDimensionId(null);
+    }
+    setHoveredSubcatCode(null);
+    setFocusedOptionSubcatCode(null);
+    setHoveredOptionName(null);
+  };
 
   // Active highlighted top-level dimension
   const activeDimension: RadarDimensionScore | undefined = useMemo(() => {
@@ -165,12 +165,12 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
     if (!comparisonCase || dimensions.length === 0) return null;
     return dimensions
       .map((d, i) => {
-        const val = d.singleCaseScore ?? 0;
+        const val = metricMode === 'prevalence' ? (d.singleCasePrevalenceScore ?? 0) : (d.singleCaseScore ?? 0);
         const { x, y } = getCoordinates(i, val, dimensions.length);
         return `${x.toFixed(1)},${y.toFixed(1)}`;
       })
       .join(' ');
-  }, [dimensions, comparisonCase]);
+  }, [dimensions, comparisonCase, metricMode]);
 
   // Drill-down polygon points
   const cohortDrillPoints = useMemo(() => {
@@ -178,24 +178,24 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
     const total = drillDownResult.subcategories.length;
     return drillDownResult.subcategories
       .map((s, i) => {
-        const val = s.prevalencePercentage;
+        const val = metricMode === 'prevalence' ? s.prevalencePercentage : (s.intensityPercentage ?? 0);
         const { x, y } = getCoordinates(i, val, total);
         return `${x.toFixed(1)},${y.toFixed(1)}`;
       })
       .join(' ');
-  }, [drillDownResult]);
+  }, [drillDownResult, metricMode]);
 
   const comparisonDrillPoints = useMemo(() => {
     if (!drillDownResult || !comparisonCase || drillDownResult.subcategories.length === 0) return null;
     const total = drillDownResult.subcategories.length;
     return drillDownResult.subcategories
       .map((s, i) => {
-        const val = s.singleCaseScore ?? 0;
+        const val = metricMode === 'prevalence' ? (s.singleCasePrevalenceScore ?? 0) : (s.singleCaseScore ?? 0);
         const { x, y } = getCoordinates(i, val, total);
         return `${x.toFixed(1)},${y.toFixed(1)}`;
       })
       .join(' ');
-  }, [drillDownResult, comparisonCase]);
+  }, [drillDownResult, comparisonCase, metricMode]);
 
   // Option-level polygon points (Level 3)
   const cohortOptionPoints = useMemo(() => {
@@ -267,17 +267,16 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
         <div className="flex flex-wrap items-center gap-2">
           {/* Back button when in drill-down */}
           {isDrillDown ? (
-            <button
-              type="button"
-              onClick={() => {
-                setDrillDownId(isPsychiatricDiagnosisDrillDown ? 'symptoms' : null);
-                setHoveredSubcatCode(isPsychiatricDiagnosisDrillDown ? '6.3' : null);
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>{isPsychiatricDiagnosisDrillDown ? 'Zurück zu Sozialverhalten (F91)' : 'Zurück zur Gesamtübersicht'}</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-semibold">
+                <button type="button" onClick={() => setMetricMode('prevalence')} className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${metricMode === 'prevalence' ? 'bg-white text-emerald-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>Prävalenz</button>
+                <button type="button" onClick={() => setMetricMode('intensity')} className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${metricMode === 'intensity' ? 'bg-white text-emerald-800 shadow-xs' : 'text-slate-600 hover:text-slate-900'}`}>Intensität</button>
+              </div>
+              <button type="button" onClick={goBackOneLevel} className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer">
+                <ArrowLeft className="w-4 h-4" />
+                <span>{selectedSectionCode ? 'Zurück zu den Unterbereichen' : 'Zurück zu den 8 Hauptbereichen'}</span>
+              </button>
+            </div>
           ) : (
             /* Metric Mode Toggle in top view with Help button */
             <div className="flex items-center gap-1.5">
@@ -392,11 +391,12 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
           <span>Bereich wählen:</span>
         </span>
 
-        {/* Option 0: Gesamte 7 Hauptbereiche */}
+        {/* Option 0: Gesamte Hauptübersicht */}
         <button
           type="button"
           onClick={() => {
             setDrillDownId(null);
+            setSelectedSectionCode(null);
             setHoveredSubcatCode(null);
           }}
           className={`px-3 py-1.5 rounded-xl font-bold transition-all shrink-0 cursor-pointer ${
@@ -405,18 +405,19 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
               : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
           }`}
         >
-          Alle 7 Hauptbereiche
+          Alle 8 Hauptbereiche
         </button>
 
         {/* Quick buttons for each chapter */}
         {dimensions.map((d) => {
-          const isSelected = drillDownId === d.id || (isPsychiatricDiagnosisDrillDown && d.id === 'symptoms');
+          const isSelected = drillDownId === d.id;
           return (
             <button
               key={d.id}
               type="button"
               onClick={() => {
                 setDrillDownId(d.id);
+                setSelectedSectionCode(null);
                 setHoveredDimensionId(d.id);
                 setHoveredSubcatCode(null);
               }}
@@ -444,11 +445,12 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
           <span>
             {isDrillDown ? (
               <>
-                <strong>Unterkategorien im Radar aktiv:</strong> Sie sehen alle differenzierten Einzelstörungen und Subkriterien für <strong>{drillDownResult.shortTitle}</strong>. Tippen Sie auf einen Punkt, um Details zu sehen.
+                <strong>{drillDownResult.level === 'sections' ? 'Unterbereiche im Radar aktiv:' : 'Einzelkriterien im Radar aktiv:'}</strong>{' '}
+                Auswertung für <strong>{drillDownResult.shortTitle}</strong>. Prävalenz zeigt betroffene Fälle; Intensität mittlere Kriterien pro Fall.
               </>
             ) : (
               <>
-                <strong>Interaktiver Drill-Down:</strong> Klicken Sie direkt auf einen Bereich im Diagramm (z. B. <em>Klinische Symptome</em>), um alle Unterkategorien wie Schizophrenie, Affektive Störung etc. im Radar-Diagramm aufzuschlüsseln.
+                <strong>Interaktiver Drill-Down:</strong> Klicken Sie auf einen Hauptbereich und anschließend auf einen Unterbereich, um dessen Einzelkriterien zu sehen.
               </>
             )}
           </span>
@@ -456,13 +458,10 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
         {isDrillDown && (
           <button
             type="button"
-            onClick={() => {
-              setDrillDownId(isPsychiatricDiagnosisDrillDown ? 'symptoms' : null);
-              setHoveredSubcatCode(isPsychiatricDiagnosisDrillDown ? '6.3' : null);
-            }}
+            onClick={goBackOneLevel}
             className="text-emerald-800 hover:text-emerald-950 underline font-bold shrink-0 text-xs cursor-pointer"
           >
-            {isPsychiatricDiagnosisDrillDown ? '← Sozialverhalten (F91)' : '← Übersicht'}
+            {selectedSectionCode ? '← Unterbereiche' : '← Übersicht'}
           </button>
         )}
       </div>
@@ -677,7 +676,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
 
               {/* 5B. Interactive Vertex Points & Labels: SUBCATEGORY DRILL-DOWN MODE (Level 2) */}
               {!isOptionDrillDown && isDrillDown && drillDownResult.subcategories.map((sub, i) => {
-                const val = sub.prevalencePercentage;
+                const val = metricMode === 'prevalence' ? sub.prevalencePercentage : (sub.intensityPercentage ?? 0);
                 const { x, y, angle } = getCoordinates(i, val, activeSpokesCount);
                 const { x: lx, y: ly } = getCoordinates(i, 100, activeSpokesCount, 26);
                 const isHovered = hoveredSubcatCode === sub.code;
@@ -721,8 +720,8 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                     {/* Comparison Case Point if selected */}
                     {comparisonCase && (
                       <circle
-                        cx={getCoordinates(i, sub.singleCaseScore ?? 0, activeSpokesCount).x}
-                        cy={getCoordinates(i, sub.singleCaseScore ?? 0, activeSpokesCount).y}
+                        cx={getCoordinates(i, metricMode === 'prevalence' ? (sub.singleCasePrevalenceScore ?? 0) : (sub.singleCaseScore ?? 0), activeSpokesCount).x}
+                        cy={getCoordinates(i, metricMode === 'prevalence' ? (sub.singleCasePrevalenceScore ?? 0) : (sub.singleCaseScore ?? 0), activeSpokesCount).y}
                         r="4"
                         fill="#6366f1"
                         stroke="#ffffff"
@@ -747,9 +746,6 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                       >
                         {sub.shortLabel}
                       </text>
-                      {sub.code === '6.3' && drillDownResult.dimensionId === 'symptoms' && (
-                        <title>Klicken, um die Diagnosekategorien 6.1.1–6.1.8 als Spinnendiagramm anzuzeigen</title>
-                      )}
                       <text
                         x={0}
                         y={9}
@@ -761,7 +757,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                         {val}%
                         {comparisonCase && (
                           <tspan fill="#6366f1" dx="3">
-                            {sub.singleCasePresent ? '✓ (Fall)' : '–'}
+                            {metricMode === 'prevalence' ? (sub.singleCasePresent ? '✓ (Fall)' : '–') : `${sub.singleCaseScore ?? 0}% (Fall)`}
                           </tspan>
                         )}
                       </text>
@@ -820,8 +816,8 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                     {/* Comparison Case Point */}
                     {comparisonCase && (
                       <circle
-                        cx={getCoordinates(i, d.singleCaseScore ?? 0, activeSpokesCount).x}
-                        cy={getCoordinates(i, d.singleCaseScore ?? 0, activeSpokesCount).y}
+                        cx={getCoordinates(i, metricMode === 'prevalence' ? (d.singleCasePrevalenceScore ?? 0) : (d.singleCaseScore ?? 0), activeSpokesCount).x}
+                        cy={getCoordinates(i, metricMode === 'prevalence' ? (d.singleCasePrevalenceScore ?? 0) : (d.singleCaseScore ?? 0), activeSpokesCount).y}
                         r="4"
                         fill="#6366f1"
                         stroke="#ffffff"
@@ -861,7 +857,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                         {val}%
                         {comparisonCase && d.singleCaseScore !== undefined && (
                           <tspan fill="#6366f1" dx="3">
-                            / {d.singleCaseScore}%
+                            / {metricMode === 'prevalence' ? (d.singleCasePrevalenceScore ?? 0) : d.singleCaseScore}%
                           </tspan>
                         )}
                       </text>
@@ -877,7 +873,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
             <div className="flex items-center gap-2">
               <span className="w-3.5 h-3.5 rounded-full bg-emerald-600 shadow-xs border border-white"></span>
               <span className="font-semibold text-slate-800">
-                Klienten-Durchschnitt ({isDrillDown ? 'Prävalenz' : metricMode === 'prevalence' ? 'Prävalenz' : 'Intensität'})
+                Klienten-Durchschnitt ({metricMode === 'prevalence' ? 'Prävalenz' : 'Intensität'})
               </span>
             </div>
 
@@ -908,10 +904,10 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                 </div>
                 <div className="text-right shrink-0">
                   <div className="text-2xl font-black text-emerald-700">
-                    {activeSubcategory.prevalencePercentage}%
+                    {metricMode === 'prevalence' ? activeSubcategory.prevalencePercentage : (activeSubcategory.intensityPercentage ?? 0)}%
                   </div>
                   <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                    Prävalenz
+                    {metricMode === 'prevalence' ? 'Prävalenz' : 'Intensität'}
                   </div>
                 </div>
               </div>
@@ -927,7 +923,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                 <div className="bg-white p-2.5 rounded-xl border border-slate-200/60">
                   <span className="text-[11px] text-slate-500 block">Betroffene Fälle:</span>
                   <span className="font-bold text-slate-900">
-                    {activeSubcategory.totalCasesAffected} von {drillDownResult.totalCases} ({activeSubcategory.prevalencePercentage}%)
+                    {activeSubcategory.totalCasesAffected} von {drillDownResult.totalCases} Fälle ({activeSubcategory.prevalencePercentage}% Prävalenz; {activeSubcategory.intensityPercentage ?? 0}% Intensität)
                   </span>
                 </div>
                 <div className="bg-white p-2.5 rounded-xl border border-slate-200/60">
@@ -944,13 +940,17 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                   <div className="flex items-center justify-between font-bold text-indigo-950">
                     <span>Fall {comparisonCase.stammdaten.chiffre}:</span>
                     <span className="text-indigo-700 font-black">
-                      {activeSubcategory.singleCasePresent ? 'Vorhanden / Dokumentiert' : 'Nicht dokumentiert'}
+                      {metricMode === 'prevalence'
+                        ? (activeSubcategory.singleCasePresent ? 'Vorhanden / Dokumentiert' : 'Nicht dokumentiert')
+                        : `${activeSubcategory.singleCaseScore ?? 0}% Intensität`}
                     </span>
                   </div>
                   <div className="text-[11px] text-indigo-800">
-                    {activeSubcategory.singleCasePresent
-                      ? 'Dieses Kriterium wurde im aktiven Vergleichsfall positiv erfasst.'
-                      : 'Dieses Merkmal wurde bei diesem Klienten nicht markiert.'}
+                    {metricMode === 'intensity'
+                      ? `${activeSubcategory.singleCaseCount ?? 0} Kriterien im Vergleichsfall; Ø ${activeSubcategory.averageItems ?? 0} pro Fall.`
+                      : activeSubcategory.singleCasePresent
+                        ? 'Dieses Kriterium wurde im aktiven Vergleichsfall positiv erfasst.'
+                        : 'Dieses Merkmal wurde bei diesem Klienten nicht markiert.'}
                   </div>
                 </div>
               )}
@@ -1107,7 +1107,11 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    setDrillDownId(isPsychiatricDiagnosisDrillDown ? 'symptoms' : null);
+                    if (selectedSectionCode) setSelectedSectionCode(null);
+                    else {
+                      setDrillDownId(null);
+                      setHoveredDimensionId(null);
+                    }
                     setHoveredSubcatCode(null);
                     setFocusedOptionSubcatCode(null);
                     setHoveredOptionName(null);
@@ -1115,7 +1119,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                   className="w-full py-2 px-3 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>{isPsychiatricDiagnosisDrillDown ? 'Zurück zu Sozialverhalten (F91)' : 'Zurück zu den 7 Hauptbereichen'}</span>
+                  <span>{selectedSectionCode ? 'Zurück zu den Unterbereichen' : 'Zurück zu den 8 Hauptbereichen'}</span>
                 </button>
               </div>
             </div>
@@ -1154,12 +1158,13 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                 type="button"
                 onClick={() => {
                   setDrillDownId(activeDimension.id);
+                  setSelectedSectionCode(null);
                   setHoveredSubcatCode(null);
                 }}
                 className="w-full py-2.5 px-3 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
                 <ZoomIn className="w-4 h-4" />
-                <span>Unterkategorien im Diagramm anzeigen ({activeDimension.shortLabel})</span>
+                <span>Unterbereiche im Diagramm anzeigen ({activeDimension.shortLabel})</span>
               </button>
 
               {/* Metric stats grid */}
@@ -1184,7 +1189,9 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                   <div className="flex items-center justify-between font-bold text-indigo-950">
                     <span>Fall {comparisonCase.stammdaten.chiffre}:</span>
                     <span className="text-indigo-700 font-black">
-                      {activeDimension.singleCaseScore ?? 0}% Ausprägung
+                      {metricMode === 'prevalence'
+                        ? `${activeDimension.singleCasePrevalenceScore ?? 0}% Prävalenz`
+                        : `${activeDimension.singleCaseScore ?? 0}% Intensität`}
                     </span>
                   </div>
                   <div className="text-[11px] text-indigo-800">
@@ -1201,7 +1208,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
               <div className="flex items-center justify-between text-xs font-bold text-slate-800">
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-emerald-600" />
-                  <span>Alle Unterkategorien ({drillDownResult.subcategories.length})</span>
+                  <span>{drillDownResult.level === 'sections' ? 'Unterbereiche' : 'Einzelkriterien'} ({drillDownResult.subcategories.length})</span>
                 </div>
                 <span className="text-[11px] text-slate-400 font-normal">Klicken zum Hervorheben</span>
               </div>
@@ -1230,7 +1237,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                         )}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <span className="font-mono font-bold text-slate-900">{sub.prevalencePercentage}%</span>
+                        <span className="font-mono font-bold text-slate-900">{metricMode === 'prevalence' ? sub.prevalencePercentage : (sub.intensityPercentage ?? 0)}%</span>
                         <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                       </div>
                     </button>
@@ -1260,6 +1267,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                     key={d.id}
                     onClick={() => {
                       setDrillDownId(d.id);
+                      setSelectedSectionCode(null);
                       setHoveredDimensionId(d.id);
                     }}
                     title={`Klicken, um Unterkategorien für ${d.shortLabel} zu öffnen`}
