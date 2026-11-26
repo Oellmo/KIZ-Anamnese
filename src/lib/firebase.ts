@@ -659,7 +659,7 @@ export async function ensureQuestionnaireCatalog(): Promise<QuestionnaireCatalog
           await runTransaction(db, async (transaction) => {
             const versionRef = doc(db, CATALOG_VERSION_ID, String(stored.version));
             const versionSnapshot = await transaction.get(versionRef);
-            if (!versionSnapshot.exists()) transaction.set(versionRef, stored);
+            if (!versionSnapshot.exists()) transaction.set(versionRef, sanitizeForFirestore(stored));
           });
         } catch (error) {
           console.warn('Could not backfill catalog version snapshot:', error);
@@ -668,11 +668,11 @@ export async function ensureQuestionnaireCatalog(): Promise<QuestionnaireCatalog
       return stored;
     }
 
-    const seed: QuestionnaireCatalog = {
+    const seed = sanitizeForFirestore({
       ...SEED_CATALOG,
       updatedAt: new Date().toISOString(),
       updatedBy: auth.currentUser?.email || 'System-Seed',
-    };
+    });
     // Transaction makes concurrent first-admin visits idempotent. Never seed on a read error.
     return await runTransaction(db, async (transaction) => {
       const current = await transaction.get(ref);
@@ -704,13 +704,13 @@ export async function publishQuestionnaireCatalog(
   catalog: QuestionnaireCatalog,
   adminEmail?: string,
 ): Promise<QuestionnaireCatalog> {
-  const next: QuestionnaireCatalog = {
+  const next = sanitizeForFirestore<QuestionnaireCatalog>({
     ...catalogFromChapters(catalog.chapters, catalog.version + 1, adminEmail || auth.currentUser?.email || 'Admin'),
     schemaVersion: 1,
     version: catalog.version + 1,
     updatedAt: new Date().toISOString(),
     updatedBy: adminEmail || auth.currentUser?.email || 'Admin',
-  };
+  });
   try {
     const ref = doc(db, 'settings', CATALOG_DOCUMENT_ID);
     await runTransaction(db, async (transaction) => {

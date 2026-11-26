@@ -8,7 +8,7 @@ export const CATALOG_VERSION_ID = 'questionnaire_catalog_versions';
 export const LEGACY_CATALOG_VERSION = 'legacy-static-v1';
 
 function stableIdForItem(chapterId: number, sectionId: string, item: ItemDefinition): string {
-  const id = (item as CatalogItemDefinition).id || `item_${chapterId}_${sectionId}_${item.code}`;
+  const id = (item as CatalogItemDefinition).id || `item_${chapterId}_${sectionId}_${item.code ?? ''}`;
   return id.replace(/[^a-zA-Z0-9_-]/g, '_');
 }
 
@@ -23,13 +23,14 @@ export function catalogFromChapters(chapters: ChapterDefinition[], version = 1, 
         stableId: (chapter as CatalogChapterDefinition).stableId || `chapter_${chapter.slug.replace(/[^a-zA-Z0-9_-]/g, '_')}`,
         code: (chapter as CatalogChapterDefinition).code ?? String(chapter.id),
         position: (chapter as CatalogChapterDefinition).position ?? chapterIndex,
-        sections: chapter.sections?.map((section, sectionIndex) => ({
+        sections: (chapter.sections ?? []).map((section, sectionIndex) => ({
           ...section,
           stableId: (section as CatalogSectionDefinition).stableId || `group_${chapter.slug}_${section.id}`.replace(/[^a-zA-Z0-9_-]/g, '_'),
           code: (section as CatalogSectionDefinition).code || section.id,
           position: (section as CatalogSectionDefinition).position ?? sectionIndex,
           items: section.items.map((item, itemIndex) => ({
             ...item,
+            code: item.code ?? '',
             id: stableIdForItem(chapter.id, section.id, item),
             position: (item as CatalogItemDefinition).position ?? itemIndex,
             inputType: (item as CatalogItemDefinition).inputType || (item.dropdownOptions?.length ? 'dropdown' : item.hasBeschreibung ? 'optional-text' : item.selectionType === 'single' || section.selectionType === 'single' ? 'radio' : 'checkbox'),
