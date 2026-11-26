@@ -549,7 +549,7 @@ export function computeStructuredRadarLevel(
 
   const isCombinedConductItems = dimension.id === 'conduct' && sectionCode === '6.3';
   const sections = sectionCode
-    ? (isCombinedConductItems ? dimension.detailSections : dimension.sections).filter((section) => section?.code === sectionCode)
+    ? (isCombinedConductItems ? dimension.detailSections || [] : dimension.sections).filter((section) => section?.code === sectionCode)
     : dimension.sections;
   if (!sections || !sections.length) return null;
   const atItemLevel = !!dimension.directItemLevel || !!sectionCode;

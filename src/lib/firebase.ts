@@ -14,17 +14,19 @@ import {
 import { 
   getFirestore, 
   doc, 
-  getDocFromServer, 
+  getDocFromServer,
   collection, 
   setDoc, 
   deleteDoc, 
   query, 
   where, 
-  onSnapshot 
+  onSnapshot,
+  runTransaction,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { KizFormData, AuthorizedAdmin } from '../types/anamnese';
 import { EINRICHTUNG_OPTIONS } from '../data/kizFormStructure';
+import { CATALOG_DOCUMENT_ID, CATALOG_VERSION_ID, QuestionnaireCatalog, SEED_CATALOG, catalogFromChapters } from '../data/catalog';
 
 // 1. Initialize Firebase App and Services
 export const app = initializeApp(firebaseConfig);
@@ -643,4 +645,89 @@ export async function saveFacilitiesToFirestore(facilities: string[], adminEmail
     handleFirestoreError(error, OperationType.WRITE, path);
   }
 }
+
+/** Read the published questionnaire; only the first trusted admin initializes the seed. */
+export async function ensureQuestionnaireCatalog(): Promise<QuestionnaireCatalog> {
+  const ref = doc(db, 'settings', CATALOG_DOCUMENT_ID);
+  try {
+    const snap = await getDocFromServer(ref);
+    if (snap.exists()) {
+      const stored = snap.data() as QuestionnaireCatalog;
+      const existingSnapshot = await getDocFromServer(doc(db, CATALOG_VERSION_ID, String(stored.version)));
+      if (!existingSnapshot.exists()) {
+        try {
+          await runTransaction(db, async (transaction) => {
+            const versionRef = doc(db, CATALOG_VERSION_ID, String(stored.version));
+            const versionSnapshot = await transaction.get(versionRef);
+            if (!versionSnapshot.exists()) transaction.set(versionRef, stored);
+          });
+        } catch (error) {
+          console.warn('Could not backfill catalog version snapshot:', error);
+        }
+      }
+      return stored;
+    }
+
+    const seed: QuestionnaireCatalog = {
+      ...SEED_CATALOG,
+      updatedAt: new Date().toISOString(),
+      updatedBy: auth.currentUser?.email || 'System-Seed',
+    };
+    // Transaction makes concurrent first-admin visits idempotent. Never seed on a read error.
+    return await runTransaction(db, async (transaction) => {
+      const current = await transaction.get(ref);
+      if (current.exists()) return current.data() as QuestionnaireCatalog;
+      transaction.set(ref, seed);
+      transaction.set(doc(db, CATALOG_VERSION_ID, String(seed.version)), seed);
+      return seed;
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, `settings/${CATALOG_DOCUMENT_ID}`);
+  }
+}
+
+export function subscribeToQuestionnaireCatalog(
+  onUpdated: (catalog: QuestionnaireCatalog | null) => void,
+  onError?: (error: unknown) => void,
+) {
+  return onSnapshot(
+    doc(db, 'settings', CATALOG_DOCUMENT_ID),
+    (snapshot) => onUpdated(snapshot.exists() ? snapshot.data() as QuestionnaireCatalog : null),
+    (error) => {
+      onError?.(error);
+      console.warn('Questionnaire catalog subscription failed:', error);
+    },
+  );
+}
+
+export async function publishQuestionnaireCatalog(
+  catalog: QuestionnaireCatalog,
+  adminEmail?: string,
+): Promise<QuestionnaireCatalog> {
+  const next: QuestionnaireCatalog = {
+    ...catalogFromChapters(catalog.chapters, catalog.version + 1, adminEmail || auth.currentUser?.email || 'Admin'),
+    schemaVersion: 1,
+    version: catalog.version + 1,
+    updatedAt: new Date().toISOString(),
+    updatedBy: adminEmail || auth.currentUser?.email || 'Admin',
+  };
+  try {
+    const ref = doc(db, 'settings', CATALOG_DOCUMENT_ID);
+    await runTransaction(db, async (transaction) => {
+      const current = await transaction.get(ref);
+      const serverVersion = current.exists() ? Number(current.data().version) || 0 : 0;
+      if (serverVersion !== catalog.version) {
+        throw new CatalogRevisionConflictError('Der Fragenkatalog wurde zwischenzeitlich geändert. Bitte neu laden.');
+      }
+      transaction.set(ref, next);
+      transaction.set(doc(db, CATALOG_VERSION_ID, String(next.version)), next);
+    });
+    return next;
+  } catch (error) {
+    if (error instanceof CatalogRevisionConflictError) throw error;
+    handleFirestoreError(error, OperationType.WRITE, `settings/${CATALOG_DOCUMENT_ID}`);
+  }
+}
+
+class CatalogRevisionConflictError extends Error {}
 

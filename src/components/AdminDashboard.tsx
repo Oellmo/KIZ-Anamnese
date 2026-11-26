@@ -4,6 +4,7 @@ import {
   Shield, 
   FolderOpen, 
   BarChart3, 
+  ListTree,
   Search, 
   Filter, 
   PlusCircle, 
@@ -67,6 +68,7 @@ import { ClientRadarChart } from './ClientRadarChart';
 import { PWAInstallButton } from './PWAInstallButton';
 import { LegalNoticeModal, LegalTab } from './LegalNoticeModal';
 import { AnalyticsPdfReportModal } from './AnalyticsPdfReportModal';
+import { QuestionnaireCatalogManager } from './QuestionnaireCatalogManager';
 
 /**
  * Normalizes user input for facility / group creation.
@@ -231,7 +233,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onAnalyticsReportChange,
 }) => {
   // Navigation tabs within Admin Dashboard
-  const [activeTab, setActiveTab] = useState<'cases' | 'analytics' | 'facilities' | 'whitelist'>('cases');
+  const [activeTab, setActiveTab] = useState<'cases' | 'analytics' | 'facilities' | 'whitelist' | 'catalog'>('cases');
   const [legalModalTab, setLegalModalTab] = useState<LegalTab | null>(null);
   const [showPdfReportModal, setShowPdfReportModal] = useState(false);
 
@@ -1401,6 +1403,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <button
             type="button"
+            onClick={() => setActiveTab('catalog')}
+            title="Fragenkatalog verwalten"
+            className={`flex-1 sm:flex-initial py-2.5 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+              activeTab === 'catalog'
+                ? 'border-emerald-500 text-emerald-400 bg-slate-800/40'
+                : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-slate-800/20'
+            }`}
+          >
+            <ListTree className="w-4 h-4 shrink-0" />
+            <span>Fragenkatalog</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setActiveTab('whitelist')}
             title="Zugriffsberechtigte E-Mail-Adressen verwalten"
             className={`flex-1 sm:flex-initial py-2.5 sm:py-3 px-2 sm:px-4 text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 sm:gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
@@ -1422,6 +1438,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-4 lg:p-6 space-y-6">
+
+        {activeTab === 'catalog' && (
+          <QuestionnaireCatalogManager
+            adminEmail={currentUser?.email || undefined}
+            isAdmin={isAdmin}
+            onBack={() => setActiveTab('cases')}
+          />
+        )}
 
         {/* ============================================================ */}
         {/* TAB 1: FALLAKTEN VERWALTEN (Cases & Deletion)                 */}

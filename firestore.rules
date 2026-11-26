@@ -95,10 +95,32 @@ service cloud.firestore {
     // Only authorized admins can write/update settings
     match /settings/{settingId} {
       allow get: if isValidId(settingId);
-      allow create, update: if isAuthorizedAdmin() && isValidId(settingId) &&
+      allow create, update: if isAuthorizedAdmin() && settingId != 'questionnaire_catalog' && isValidId(settingId) &&
         incoming().keys().hasAll(['items']) &&
         incoming().items is list && incoming().items.size() <= 100;
-      allow delete: if isAuthorizedAdmin();
+      allow delete: if isAuthorizedAdmin() && settingId != 'questionnaire_catalog';
+    }
+
+    // The published questionnaire is public-readable for anonymous questionnaire sessions,
+    // but can only be changed by an explicitly authorized administrator.
+    match /settings/questionnaire_catalog {
+      allow get: if true;
+      allow create, update: if isAuthorizedAdmin() &&
+        incoming().keys().hasAll(['schemaVersion', 'version', 'updatedAt', 'updatedBy', 'chapters']) &&
+        incoming().schemaVersion == 1 &&
+        incoming().version is int && incoming().version > 0 &&
+        incoming().chapters is list && incoming().chapters.size() <= 100;
+      allow delete: if isMasterAdmin();
+    }
+
+    // Immutable snapshots allow historical reports to resolve their original labels.
+    match /questionnaire_catalog_versions/{versionId} {
+      allow get: if true;
+      allow list: if isAuthorizedAdmin();
+      allow create: if isAuthorizedAdmin() &&
+        incoming().keys().hasAll(['schemaVersion', 'version', 'updatedAt', 'updatedBy', 'chapters']) &&
+        incoming().schemaVersion == 1 && incoming().version is int && incoming().chapters is list;
+      allow update, delete: if false;
     }
   }
 }

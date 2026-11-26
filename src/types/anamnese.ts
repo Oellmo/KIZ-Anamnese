@@ -77,9 +77,12 @@ export interface SectionDefinition {
   description?: string;
   selectionType?: 'single' | 'multiple';
   items: ItemDefinition[];
+  position?: number;
+  deleted?: boolean;
 }
 
 export interface ItemDefinition {
+  id?: string;
   code: string;
   label: string;
   description?: string;
@@ -90,16 +93,56 @@ export interface ItemDefinition {
   sublabel?: string;
   dropdownOptions?: string[];
   dropdownSelectionMode?: 'single' | 'multiple';
+  inputType?: 'checkbox' | 'radio' | 'dropdown' | 'text' | 'optional-text';
+  required?: boolean;
+  position?: number;
+  deleted?: boolean;
 }
 
 export interface ChapterDefinition {
   id: number;
+  stableId?: string;
+  position?: number;
   slug: string;
   title: string;
   shortTitle: string;
   badge: string;
   subtitle: string;
   sections?: SectionDefinition[];
+  deleted?: boolean;
+}
+
+export interface CatalogItemDefinition extends ItemDefinition {
+  id: string;
+  code: string;
+  position: number;
+  inputType: 'checkbox' | 'radio' | 'dropdown' | 'text' | 'optional-text';
+  required: boolean;
+  deleted?: boolean;
+}
+
+export interface CatalogSectionDefinition extends Omit<SectionDefinition, 'items'> {
+  stableId: string;
+  code: string;
+  position: number;
+  deleted?: boolean;
+  items: CatalogItemDefinition[];
+}
+
+export interface CatalogChapterDefinition extends Omit<ChapterDefinition, 'sections'> {
+  stableId: string;
+  code: string;
+  position: number;
+  deleted?: boolean;
+  sections?: CatalogSectionDefinition[];
+}
+
+export interface QuestionnaireCatalog {
+  schemaVersion: 1;
+  version: number;
+  updatedAt: string;
+  updatedBy: string;
+  chapters: CatalogChapterDefinition[];
 }
 
 export interface StaffMember {
