@@ -54,7 +54,6 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
   const [focusedOptionSubcatCode, setFocusedOptionSubcatCode] = useState<string | null>(null);
   const [hoveredOptionName, setHoveredOptionName] = useState<string | null>(null);
   const [expandedOptionCases, setExpandedOptionCases] = useState<Record<string, boolean>>({});
-
   const toggleOptionCases = (optName: string) => {
     setExpandedOptionCases((prev) => ({ ...prev, [optName]: !prev[optName] }));
   };
@@ -147,6 +146,21 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
     const x = cx + r * Math.cos(angle);
     const y = cy + r * Math.sin(angle);
     return { x, y, angle };
+  };
+
+  // Bound labels to the chart's viewBox so they cannot spill into adjacent panels.
+  const fitLabel = (label: string, x: number, anchor: 'middle' | 'start' | 'end') => {
+    if (!label) return label;
+    const edgePadding = 8;
+    const availableWidth = anchor === 'start'
+      ? size - x - edgePadding
+      : anchor === 'end'
+        ? x - edgePadding
+        : Math.max(0, Math.min(x - edgePadding, size - x - edgePadding)) * 2;
+    const maxCharacters = Math.max(4, Math.floor(availableWidth / 6.5));
+    return label.length > maxCharacters
+      ? `${label.slice(0, Math.max(1, maxCharacters - 1)).trimEnd()}…`
+      : label;
   };
 
   // Top-level polygon points
@@ -644,6 +658,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                       onMouseEnter={() => setHoveredOptionName(opt.option)}
                       onClick={() => setHoveredOptionName(opt.option)}
                     >
+                      <title>{opt.option}</title>
                       <text
                         x={0}
                         y={-4}
@@ -652,7 +667,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                           isHovered ? 'fill-purple-900 font-extrabold' : 'fill-slate-800'
                         }`}
                       >
-                        {opt.option}
+                        {fitLabel(opt.option, lx, textAnchor)}
                       </text>
                       <text
                         x={0}
@@ -736,6 +751,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                       onMouseEnter={() => setHoveredSubcatCode(sub.code)}
                       onClick={() => selectSubcategory(sub.code)}
                     >
+                      <title>{sub.label}</title>
                       <text
                         x={0}
                         y={-4}
@@ -744,7 +760,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                           isHovered ? 'fill-emerald-800 font-extrabold' : 'fill-slate-700'
                         }`}
                       >
-                        {sub.shortLabel}
+                        {fitLabel(sub.shortLabel, lx, textAnchor)}
                       </text>
                       <text
                         x={0}
@@ -835,7 +851,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                         setDrillDownId(d.id);
                       }}
                     >
-                      <title>Klicken, um Unterkategorien anzuzeigen</title>
+                      <title>{d.label}</title>
                       <text
                         x={0}
                         y={-4}
@@ -844,7 +860,7 @@ export const ClientRadarChart: React.FC<ClientRadarChartProps> = ({
                           isHovered ? 'fill-emerald-800 font-extrabold underline' : 'fill-slate-700 hover:fill-emerald-800'
                         }`}
                       >
-                        {d.shortLabel}
+                        {fitLabel(d.shortLabel, lx, textAnchor)}
                       </text>
                       <text
                         x={0}
